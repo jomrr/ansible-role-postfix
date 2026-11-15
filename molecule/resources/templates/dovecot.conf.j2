@@ -1,0 +1,45 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+{% if __postfix_dovecot_version.stdout is version('2.4', '>=') %}
+dovecot_config_version = 2.4.0
+dovecot_storage_version = 2.4.0
+auth_allow_cleartext = yes
+mail_driver = maildir
+mail_path = ~/Maildir
+passdb passwd-file {
+  passwd_file_path = /etc/dovecot/postfix-users
+}
+userdb passwd-file {
+  passwd_file_path = /etc/dovecot/postfix-users
+}
+{% else %}
+disable_plaintext_auth = no
+mail_location = maildir:~/Maildir
+passdb {
+  driver = passwd-file
+  args = /etc/dovecot/postfix-users
+}
+userdb {
+  driver = passwd-file
+  args = /etc/dovecot/postfix-users
+}
+{% endif %}
+protocols = lmtp
+listen = 127.0.0.1
+ssl = no
+auth_mechanisms = plain login
+log_path = /var/log/dovecot-postfix-test.log
+service auth {
+  unix_listener /var/lib/postfix-test/auth {
+    mode = 0666
+    user = root
+    group = root
+  }
+}
+service lmtp {
+  unix_listener /var/lib/postfix-test/lmtp {
+    mode = 0666
+    user = root
+    group = root
+  }
+}

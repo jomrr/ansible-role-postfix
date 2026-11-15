@@ -1,0 +1,11 @@
+---
+# role: postfix
+# file: vars/Debian.yml
+
+__postfix_packages: [postfix, libsasl2-modules, ca-certificates, logrotate]
+__postfix_backend_packages:
+  files: []
+  mysql: [postfix-mysql]
+  pgsql: [postfix-pgsql]
+__postfix_ca_file: /etc/ssl/certs/ca-certificates.crt
+__postfix_setgid_group: postdrop

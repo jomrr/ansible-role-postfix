@@ -1,0 +1,313 @@
+---
+# role: postfix
+# file: meta/argument_specs.yml
+
+argument_specs:
+  main:
+    short_description: Configure local and virtual mail delivery, authenticated submission
+      and secure provider relays.
+    options:
+      postfix_hostname:
+        type: str
+        default: '{{ ansible_facts.fqdn }}'
+        description: Fully qualified hostname announced by the mail server.
+      postfix_origin:
+        type: str
+        default: $myhostname
+        description: Domain appended to locally submitted unqualified addresses.
+      postfix_interfaces:
+        type: list
+        default:
+          - loopback-only
+        description: Interfaces used by the standard SMTP and submission listeners.
+        elements: str
+      postfix_protocols:
+        type: str
+        default: all
+        description: IP protocol families enabled by Postfix.
+        choices:
+          - all
+          - ipv4
+          - ipv6
+      postfix_local_domains:
+        type: list
+        default:
+          - $myhostname
+          - localhost
+        description: Domains delivered to local Unix accounts through the local delivery
+          agent.
+        elements: str
+      postfix_trusted_networks:
+        type: list
+        default:
+          - 127.0.0.0/8
+          - '[::1]/128'
+        description: Networks permitted to connect when the standard SMTP listener is restricted.
+        elements: str
+      postfix_smtp_trusted_only:
+        type: bool
+        default: true
+        description: Restrict standard SMTP reception to trusted networks; false permits
+          public MX reception.
+      postfix_local_aliases:
+        type: dict
+        default:
+          postmaster: root
+        description: Local aliases managed separately from distribution aliases.
+      postfix_smtp_enabled:
+        type: bool
+        default: true
+        description: Enable the standard SMTP listener on port 25.
+      postfix_smtp_auth_required:
+        type: bool
+        default: true
+        description: Require TLS and Dovecot authentication on the standard SMTP listener.
+      postfix_submission_enabled:
+        type: bool
+        default: false
+        description: Enable authenticated submission with mandatory STARTTLS.
+      postfix_submission_port:
+        type: int
+        default: 587
+        description: Port for authenticated STARTTLS submission.
+      postfix_submissions_enabled:
+        type: bool
+        default: false
+        description: Enable authenticated submission with implicit TLS.
+      postfix_submissions_port:
+        type: int
+        default: 465
+        description: Port for authenticated implicit TLS submission.
+      postfix_dovecot_auth_socket:
+        type: str
+        default: private/auth
+        description: Dovecot authentication socket relative to the Postfix queue directory.
+      postfix_tls_certificate:
+        type: str
+        default: ''
+        description: Certificate chain required by any listener enforcing authentication.
+      postfix_tls_private_key:
+        type: str
+        default: ''
+        description: Private key required by either submission service.
+      postfix_tls_ca_file:
+        type: str
+        default: ''
+        description: Additional trusted CA bundle for outgoing TLS; empty uses the platform
+          bundle.
+      postfix_sender_authorization:
+        type: bool
+        default: true
+        description: Reject SMTP envelope senders that do not belong to the authenticated
+          user.
+      postfix_local_submitters:
+        type: dict
+        default:
+          root:
+            - '*'
+        description: Unix submitters and their permitted envelope senders; root is trusted.
+      postfix_account_backend:
+        type: str
+        default: files
+        description: Account lookup backend for recipients, aliases and sender ownership.
+        choices:
+          - files
+          - mysql
+          - pgsql
+      postfix_virtual_domains:
+        type: list
+        default: []
+        description: Domains accepted for virtual mailboxes and delivered through LMTP.
+        elements: str
+      postfix_mailboxes:
+        type: list
+        default: []
+        description: Valid virtual recipient addresses for the text-file backend.
+        elements: str
+      postfix_virtual_aliases:
+        type: dict
+        default: {}
+        description: Virtual aliases and their destination addresses for the text-file backend.
+      postfix_sender_logins:
+        type: dict
+        default: {}
+        description: Envelope sender addresses and authorized SASL identities for the text-file
+          backend.
+      postfix_dovecot_lmtp_transport:
+        type: str
+        default: lmtp:unix:private/dovecot-lmtp
+        description: LMTP destination used for virtual mailbox delivery to Dovecot.
+      postfix_local_lmtp_enabled:
+        type: bool
+        default: false
+        description: Deliver local Unix mailbox recipients through Dovecot LMTP as well.
+      postfix_providers:
+        type: list
+        default: []
+        description: Named external providers with separate credentials and TLS transports.
+        elements: dict
+        options:
+          name:
+            type: str
+            required: true
+            description: Unique lowercase transport name containing letters, digits or underscores.
+          host:
+            type: str
+            required: true
+            description: DNS name matching the relay TLS certificate.
+          port:
+            type: int
+            description: Optional override of postfix_provider_port.
+          tls:
+            type: str
+            choices:
+              - starttls
+              - wrapper
+            description: Optional override of postfix_provider_tls.
+          username:
+            type: str
+            required: true
+            description: Provider SASL username without whitespace or colon.
+          password:
+            type: str
+            required: true
+            no_log: true
+            description: Provider SASL password without whitespace; use Ansible Vault.
+      postfix_provider_port:
+        type: int
+        default: 587
+        description: Default external provider port, with optional per-provider overrides.
+      postfix_provider_tls:
+        type: str
+        default: starttls
+        description: Default external provider TLS mode, with optional per-provider overrides.
+        choices:
+          - starttls
+          - wrapper
+      postfix_default_provider:
+        type: str
+        default: ''
+        description: Default provider name; empty permits direct SMTP delivery for unmatched
+          senders.
+      postfix_sender_relays:
+        type: dict
+        default: {}
+        description: Exact envelope sender addresses mapped to provider names.
+      postfix_transport_maps:
+        type: dict
+        default: {}
+        description: Additional recipient domain or address transport routes.
+      postfix_fetchmail_enabled:
+        type: bool
+        default: false
+        description: Enable a dedicated trusted SMTP listener for Fetchmail delivery.
+      postfix_fetchmail_auth_required:
+        type: bool
+        default: true
+        description: Require TLS and Dovecot authentication in addition to trusted Fetchmail
+          sources.
+      postfix_fetchmail_address:
+        type: str
+        default: 127.0.0.1
+        description: Numeric interface address for the dedicated Fetchmail listener.
+      postfix_fetchmail_port:
+        type: int
+        default: 2525
+        description: Port of the dedicated Fetchmail listener.
+      postfix_fetchmail_networks:
+        type: list
+        default:
+          - 127.0.0.1/32
+          - '[::1]/128'
+        description: Sources permitted on the Fetchmail listener; recipients must still
+          be local.
+        elements: str
+      postfix_sender_bcc:
+        type: dict
+        default: {}
+        description: Envelope senders and their optional outgoing archive copy address.
+      postfix_recipient_bcc:
+        type: dict
+        default: {}
+        description: Envelope recipients and their optional incoming archive copy address.
+      postfix_message_size_limit:
+        type: int
+        default: 10240000
+        description: Maximum accepted message size in bytes.
+      postfix_maximal_queue_lifetime:
+        type: str
+        default: 5d
+        description: Maximum time that undelivered messages remain queued.
+      postfix_bounce_queue_lifetime:
+        type: str
+        default: 5d
+        description: Maximum time that undeliverable bounce messages remain queued.
+      postfix_minimal_backoff_time:
+        type: str
+        default: 300s
+        description: Minimum delay between delivery retries.
+      postfix_maximal_backoff_time:
+        type: str
+        default: 4000s
+        description: Maximum delay between delivery retries.
+      postfix_queue_run_delay:
+        type: str
+        default: 300s
+        description: Interval between deferred-queue scans.
+      postfix_log_file:
+        type: str
+        default: /var/log/postfix.log
+        description: Direct Postfix log file; empty uses the system mail syslog facility.
+      postfix_tls_loglevel:
+        type: int
+        default: 1
+        description: TLS connection summary logging level.
+        choices:
+          - 0
+          - 1
+      postfix_smtpd_milters:
+        type: list
+        default: []
+        description: Milter endpoints for incoming SMTP, including DKIM and DMARC filters.
+        elements: str
+      postfix_non_smtpd_milters:
+        type: list
+        default: []
+        description: Milter endpoints for local sendmail submissions.
+        elements: str
+      postfix_submission_milters:
+        type: list
+        default: []
+        description: Milter endpoints for authenticated submission, including signing and
+          From checks.
+        elements: str
+      postfix_milter_default_action:
+        type: str
+        default: tempfail
+        description: Action when an enabled Milter is unavailable.
+        choices:
+          - tempfail
+          - reject
+          - accept
+      postfix_smtp_policy_services:
+        type: list
+        default: []
+        description: Policy service endpoints for public SMTP recipient checks, such as
+          SPF.
+        elements: str
+      postfix_backup:
+        type: bool
+        default: false
+        description: Preserve previous managed files; backups may contain provider credentials.
+      postfix_database:
+        type: dict
+        default: {}
+        no_log: true
+        description: Shared native database connection options for the existing PostfixAdmin
+          schema; hosts is required for mysql or pgsql. Use a SELECT-only login and a Unix
+          socket or verified TLS.
+      postfix_database_queries:
+        type: dict
+        default: {}
+        description: Optional overrides of the PostfixAdmin domains, mailboxes, virtual_aliases,
+          alias_domains, alias_domain_catchalls, senders and alias_domain_senders queries.

@@ -1,0 +1,58 @@
+---
+# role: postfix
+# file: vars/main.yml
+
+__postfix_maps:
+  - mailboxes
+  - virtual_aliases
+  - senders
+  - protected_senders
+  - local_senders
+  - sender_relay
+  - sender_transport
+  - sender_bcc
+  - recipient_bcc
+  - transport
+
+__postfix_database_queries:
+  domains: >-
+    SELECT domain FROM domain WHERE domain='%s' AND active=TRUE AND backupmx=FALSE
+    UNION SELECT ad.alias_domain FROM alias_domain ad JOIN domain d ON d.domain=ad.target_domain
+    WHERE ad.alias_domain='%s' AND ad.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
+  mailboxes: >-
+    SELECT m.username FROM mailbox m JOIN domain d ON d.domain=m.domain
+    WHERE m.username='%s' AND m.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
+  virtual_aliases: >-
+    SELECT a.goto FROM alias a JOIN domain d ON d.domain=a.domain
+    WHERE a.address='%s' AND a.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
+  alias_domains: >-
+    SELECT a.goto FROM alias a JOIN alias_domain ad ON a.domain=ad.target_domain
+    JOIN domain d ON d.domain=ad.target_domain WHERE ad.alias_domain='%d'
+    AND a.address=CONCAT('%u','@',ad.target_domain) AND a.active=TRUE AND ad.active=TRUE
+    AND d.active=TRUE AND d.backupmx=FALSE
+  alias_domain_catchalls: >-
+    SELECT a.goto FROM alias a JOIN alias_domain ad ON a.domain=ad.target_domain
+    JOIN domain d ON d.domain=ad.target_domain WHERE ad.alias_domain='%d'
+    AND a.address=CONCAT('@',ad.target_domain) AND a.active=TRUE AND ad.active=TRUE
+    AND d.active=TRUE AND d.backupmx=FALSE
+  senders: >-
+    SELECT m.username FROM mailbox m JOIN domain d ON d.domain=m.domain
+    WHERE m.username='%s' AND m.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
+    UNION SELECT a.goto FROM alias a JOIN domain d ON d.domain=a.domain
+    WHERE a.address='%s' AND a.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
+  alias_domain_senders: >-
+    SELECT a.goto FROM alias a JOIN alias_domain ad ON a.domain=ad.target_domain
+    JOIN domain d ON d.domain=ad.target_domain WHERE ad.alias_domain='%d'
+    AND a.address=CONCAT('%u','@',ad.target_domain) AND a.active=TRUE AND ad.active=TRUE
+    AND d.active=TRUE AND d.backupmx=FALSE
+  protected_senders: >-
+    SELECT 'REJECT Sender address requires authenticated submission' FROM mailbox m
+    JOIN domain d ON d.domain=m.domain WHERE m.username='%s'
+    AND m.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
+    UNION SELECT 'REJECT Sender address requires authenticated submission' FROM alias a
+    JOIN domain d ON d.domain=a.domain WHERE a.address='%s'
+    AND a.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
+    UNION SELECT 'REJECT Sender address requires authenticated submission' FROM alias a
+    JOIN alias_domain ad ON a.domain=ad.target_domain JOIN domain d ON d.domain=ad.target_domain
+    WHERE ad.alias_domain='%d' AND a.address=CONCAT('%u','@',ad.target_domain)
+    AND a.active=TRUE AND ad.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE

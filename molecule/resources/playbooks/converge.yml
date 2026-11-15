@@ -1,0 +1,9 @@
+---
+# role: postfix
+# file: molecule/resources/playbooks/converge.yml
+
+- name: POSTFIX | Converge
+  hosts: postfix_servers
+  gather_facts: true
+  roles:
+    - role: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"

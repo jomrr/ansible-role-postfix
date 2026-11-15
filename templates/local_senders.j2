@@ -1,0 +1,5 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+{% for login, senders in postfix_local_submitters | dictsort %}
+{{ login }} {{ senders | join(', ') }}
+{% endfor %}

@@ -1,0 +1,17 @@
+---
+# role: postfix
+# file: meta/main.yml
+
+galaxy_info:
+  author: Jonas Mauer
+  description: Install Postfix with authenticated TLS submission, sender authorization, provider relays and file or SQL account lookups.
+  galaxy_tags:
+    - mail
+    - postfix
+    - smtp
+    - dovecot
+  issue_tracker_url: https://github.com/jomrr/ansible-role-postfix/issues
+  license: MIT
+  min_ansible_version: "2.22"
+  namespace: jomrr
+  role_name: postfix

@@ -1,0 +1,175 @@
+---
+# role: postfix
+# file: tasks/assert.yml
+
+- name: POSTFIX | Validate listener and TLS relationships
+  ansible.builtin.assert:
+    that:
+      - postfix_submission_port > 0 and postfix_submission_port < 65536
+      - postfix_submissions_port > 0 and postfix_submissions_port < 65536
+      - postfix_fetchmail_port > 0 and postfix_fetchmail_port < 65536
+      - postfix_provider_port > 0 and postfix_provider_port < 65536
+      - ([25, postfix_submission_port, postfix_submissions_port, postfix_fetchmail_port] | unique | length) == 4
+      - (postfix_tls_certificate | length > 0) == (postfix_tls_private_key | length > 0)
+      - not (postfix_submission_enabled or postfix_submissions_enabled) or postfix_tls_certificate | length > 0
+      - not (postfix_smtp_enabled and postfix_smtp_auth_required) or postfix_tls_certificate | length > 0
+      - not (postfix_fetchmail_enabled and postfix_fetchmail_auth_required) or postfix_tls_certificate | length > 0
+      - postfix_interfaces | length > 0
+      - not postfix_fetchmail_enabled or postfix_fetchmail_networks | length > 0
+      - postfix_message_size_limit > 0
+      - postfix_virtual_domains | intersect(postfix_local_domains) | length == 0
+      - postfix_dovecot_lmtp_transport is match('^lmtp:(unix:|inet:|\[)')
+    quiet: true
+
+- name: POSTFIX | Validate single-line configuration values
+  ansible.builtin.assert:
+    that:
+      - __postfix_value | length > 0
+      - __postfix_value is not regex('[\r\n\s]')
+    quiet: true
+  loop: >-
+    {{ [postfix_hostname, postfix_origin, postfix_dovecot_auth_socket, postfix_dovecot_lmtp_transport, postfix_fetchmail_address]
+       + postfix_interfaces + postfix_local_domains + postfix_virtual_domains + postfix_trusted_networks
+       + postfix_fetchmail_networks + postfix_smtpd_milters + postfix_non_smtpd_milters
+       + postfix_submission_milters + postfix_smtp_policy_services }}
+  loop_control:
+    loop_var: __postfix_value
+    label: "{{ __postfix_value }}"
+
+- name: POSTFIX | Validate managed log and certificate paths
+  ansible.builtin.assert:
+    that:
+      - __postfix_path == '' or __postfix_path is match('^/[^\s]+$')
+    quiet: true
+  loop: "{{ [postfix_log_file, postfix_tls_certificate, postfix_tls_private_key, postfix_tls_ca_file] }}"
+  loop_control:
+    loop_var: __postfix_path
+    label: "{{ __postfix_path }}"
+
+- name: POSTFIX | Validate queue durations
+  ansible.builtin.assert:
+    that:
+      - __postfix_duration is match('^[1-9][0-9]*[smhdw]$')
+    quiet: true
+  loop: >-
+    {{ [postfix_maximal_queue_lifetime, postfix_bounce_queue_lifetime, postfix_minimal_backoff_time,
+        postfix_maximal_backoff_time, postfix_queue_run_delay] }}
+  loop_control:
+    loop_var: __postfix_duration
+    label: "{{ __postfix_duration }}"
+
+- name: POSTFIX | Validate provider references and unique transport names
+  ansible.builtin.assert:
+    that:
+      - postfix_providers | map(attribute='name') | unique | length == postfix_providers | length
+      - postfix_default_provider == '' or postfix_default_provider in postfix_providers | map(attribute='name')
+      - postfix_sender_relays.values() | difference(postfix_providers | map(attribute='name')) | length == 0
+    quiet: true
+
+- name: POSTFIX | Validate provider names
+  ansible.builtin.assert:
+    that:
+      - __postfix_name is match('^[a-z][a-z0-9_]*$')
+    quiet: true
+  loop: "{{ postfix_providers | map(attribute='name') }}"
+  loop_control:
+    loop_var: __postfix_name
+    label: "{{ __postfix_name }}"
+
+- name: POSTFIX | Validate provider hostnames
+  ansible.builtin.assert:
+    that:
+      - __postfix_host is match('^[a-zA-Z0-9][a-zA-Z0-9.-]*$')
+    quiet: true
+  loop: "{{ postfix_providers | map(attribute='host') }}"
+  loop_control:
+    loop_var: __postfix_host
+    label: "{{ __postfix_host }}"
+
+- name: POSTFIX | Validate optional provider ports
+  ansible.builtin.assert:
+    that:
+      - __postfix_port > 0 and __postfix_port < 65536
+    quiet: true
+  loop: "{{ postfix_providers | map(attribute='port', default=postfix_provider_port) }}"
+  loop_control:
+    loop_var: __postfix_port
+    label: "{{ __postfix_port }}"
+
+- name: POSTFIX | Validate provider credential encoding
+  ansible.builtin.assert:
+    that:
+      - __postfix_credential | length > 0
+      - __postfix_credential is not regex('[\s]')
+    quiet: true
+  loop: "{{ (postfix_providers | map(attribute='username')) + (postfix_providers | map(attribute='password')) }}"
+  loop_control:
+    loop_var: __postfix_credential
+  no_log: true
+
+- name: POSTFIX | Validate provider login separators
+  ansible.builtin.assert:
+    that:
+      - "':' not in __postfix_username"
+    quiet: true
+  loop: "{{ postfix_providers | map(attribute='username') }}"
+  loop_control:
+    loop_var: __postfix_username
+    label: "{{ __postfix_username }}"
+
+- name: POSTFIX | Validate SQL query override names
+  ansible.builtin.assert:
+    that:
+      - postfix_database_queries.keys() | difference(__postfix_database_queries.keys()) | length == 0
+      - postfix_database_queries.values() | select('search', '[\r\n]') | length == 0
+    quiet: true
+  when: postfix_account_backend != 'files'
+
+- name: POSTFIX | Validate SQL parameter syntax
+  ansible.builtin.assert:
+    that:
+      - "'hosts' in postfix_database"
+      - "'query' not in postfix_database"
+      - postfix_database.keys() | reject('match', '^[a-zA-Z][a-zA-Z0-9_]*$') | length == 0
+      - postfix_database.values() | select('search', '[\r\n]') | length == 0
+    quiet: true
+  no_log: true
+  when: postfix_account_backend != 'files'
+
+- name: POSTFIX | Validate recipient and sender addresses
+  ansible.builtin.assert:
+    that:
+      - __postfix_address is match('^[^\s@,=:]+@[^\s@,=:]+$')
+    quiet: true
+  loop: "{{ postfix_mailboxes + (postfix_sender_logins.keys() | list) + (postfix_sender_relays.keys() | list) }}"
+  loop_control:
+    loop_var: __postfix_address
+    label: "{{ __postfix_address }}"
+
+- name: POSTFIX | Validate multi-value address and identity tables
+  ansible.builtin.assert:
+    that:
+      - __postfix_entry.key is not regex('[\s:=]')
+      - __postfix_entry.value is sequence and __postfix_entry.value is not string
+      - __postfix_entry.value | length > 0
+      - __postfix_entry.value | select('search', '[\s,]') | length == 0
+    quiet: true
+  loop: "{{ (postfix_sender_logins | dict2items) + (postfix_virtual_aliases | dict2items) + (postfix_local_submitters | dict2items) }}"
+  loop_control:
+    loop_var: __postfix_entry
+    label: "{{ __postfix_entry.key }}"
+
+- name: POSTFIX | Validate single-value routing and archive tables
+  ansible.builtin.assert:
+    that:
+      - __postfix_entry.key is not regex('[\s:=]')
+      - __postfix_entry.value is string
+      - __postfix_entry.value | length > 0
+      - __postfix_entry.value is not regex('[\r\n]')
+    quiet: true
+  loop: >-
+    {{ (postfix_transport_maps | dict2items) + (postfix_sender_bcc | dict2items)
+       + (postfix_recipient_bcc | dict2items) + (postfix_local_aliases | dict2items) }}
+  loop_control:
+    loop_var: __postfix_entry
+    label: "{{ __postfix_entry.key }}"

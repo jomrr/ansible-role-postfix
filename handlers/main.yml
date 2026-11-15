@@ -1,0 +1,50 @@
+---
+# role: postfix
+# file: handlers/main.yml
+
+- name: POSTFIX | Rebuild changed address and routing tables
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv:
+      - postmap
+      - "{{ __postfix_table_type.stdout }}:/etc/postfix/ansible/{{ __postfix_result.__postfix_map }}"
+  loop: "{{ __postfix_map_results.results | selectattr('changed') }}"
+  loop_control:
+    loop_var: __postfix_result
+    label: "{{ __postfix_result.__postfix_map }}"
+  changed_when: true
+  listen: rebuild tables
+
+- name: POSTFIX | Rebuild protected provider credentials
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [postmap, "{{ __postfix_table_type.stdout }}:/etc/postfix/ansible/sasl_passwd"]
+  no_log: true
+  changed_when: true
+  listen: rebuild credentials
+
+- name: POSTFIX | Rebuild local aliases
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [postalias, "{{ __postfix_table_type.stdout }}:/etc/postfix/ansible/local_aliases"]
+  changed_when: true
+  listen: rebuild aliases
+
+- name: POSTFIX | Check native configuration and queue permissions
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [postfix, check]
+  changed_when: false
+  listen: restart postfix
+
+- name: POSTFIX | Restart the mail service
+  become: true
+  become_user: root
+  ansible.builtin.service:
+    name: postfix
+    state: restarted
+  listen: restart postfix

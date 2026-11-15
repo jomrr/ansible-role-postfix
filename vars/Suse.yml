@@ -1,0 +1,11 @@
+---
+# role: postfix
+# file: vars/Suse.yml
+
+__postfix_packages: [postfix, cyrus-sasl-plain, ca-certificates-mozilla, logrotate]
+__postfix_backend_packages:
+  files: []
+  mysql: [postfix-mysql]
+  pgsql: [postfix-postgresql]
+__postfix_ca_file: /etc/ssl/ca-bundle.pem
+__postfix_setgid_group: maildrop

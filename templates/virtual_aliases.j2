@@ -1,0 +1,5 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+{% for address, destinations in postfix_virtual_aliases | dictsort %}
+{{ address }} {{ destinations | join(', ') }}
+{% endfor %}

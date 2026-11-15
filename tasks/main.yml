@@ -1,0 +1,183 @@
+---
+# role: postfix
+# file: tasks/main.yml
+
+- name: POSTFIX | Load platform settings
+  ansible.builtin.include_vars: "{{ lookup('ansible.builtin.first_found', __postfix_platform_files) }}"
+  vars:
+    __postfix_platform_files:
+      files:
+        - "{{ ansible_facts.os_family }}.yml"
+      paths:
+        - "{{ role_path }}/vars"
+
+- name: POSTFIX | Validate mail service inputs
+  ansible.builtin.import_tasks: assert.yml
+
+- name: POSTFIX | Install mail service and lookup drivers
+  become: true
+  become_user: root
+  ansible.builtin.package:
+    name: "{{ __postfix_packages + __postfix_backend_packages[postfix_account_backend] }}"
+    state: present
+
+- name: POSTFIX | Read the native indexed table format
+  ansible.builtin.command:
+    argv: [postconf, -o, inet_interfaces=all, -h, default_database_type]
+  register: __postfix_table_type
+  changed_when: false
+  check_mode: false
+
+- name: POSTFIX | Read the installed mail service version
+  ansible.builtin.command:
+    argv: [postconf, -d, -h, mail_version]
+  register: __postfix_version
+  changed_when: false
+  check_mode: false
+
+- name: POSTFIX | Require local sender authorization support
+  ansible.builtin.assert:
+    that:
+      - __postfix_version.stdout is version('3.6', '>=')
+    fail_msg: Postfix 3.6 or newer is required for local_login_sender_maps.
+    quiet: true
+
+- name: POSTFIX | Create protected lookup directory
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: /etc/postfix/ansible
+    owner: root
+    group: postfix
+    mode: '0755'
+    state: directory
+
+- name: POSTFIX | Render address and routing tables
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: "{{ __postfix_map }}.j2"
+    dest: "/etc/postfix/ansible/{{ __postfix_map }}"
+    owner: root
+    group: postfix
+    mode: "{{ '0644' if __postfix_map == 'local_senders' else '0640' }}"
+    backup: "{{ postfix_backup }}"
+  loop: "{{ __postfix_maps }}"
+  loop_control:
+    loop_var: __postfix_map
+    label: "{{ __postfix_map }}"
+  register: __postfix_map_results
+  notify:
+    - rebuild tables
+    - restart postfix
+
+- name: POSTFIX | Render provider authentication table
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: sasl_passwd.j2
+    dest: /etc/postfix/ansible/sasl_passwd
+    owner: root
+    group: root
+    mode: '0600'
+    backup: "{{ postfix_backup }}"
+  no_log: true
+  notify:
+    - rebuild credentials
+    - restart postfix
+
+- name: POSTFIX | Render local aliases
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: local_aliases.j2
+    dest: /etc/postfix/ansible/local_aliases
+    owner: root
+    group: root
+    mode: '0644'
+    backup: "{{ postfix_backup }}"
+  notify:
+    - rebuild aliases
+    - restart postfix
+
+- name: POSTFIX | Render SQL lookup configurations
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: database.cf.j2
+    dest: "/etc/postfix/ansible/{{ __postfix_database_query.key }}.cf"
+    owner: root
+    group: postfix
+    mode: '0640'
+    backup: "{{ postfix_backup }}"
+  loop: "{{ __postfix_database_queries | combine(postfix_database_queries) | dict2items }}"
+  loop_control:
+    loop_var: __postfix_database_query
+    label: "{{ __postfix_database_query.key }}"
+  no_log: true
+  when: postfix_account_backend != 'files'
+  notify: restart postfix
+
+- name: POSTFIX | Remove SQL credentials when using text files
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "/etc/postfix/ansible/{{ __postfix_map }}.cf"
+    state: absent
+  loop: "{{ __postfix_database_queries.keys() }}"
+  loop_control:
+    loop_var: __postfix_map
+    label: "{{ __postfix_map }}"
+  when: postfix_account_backend == 'files'
+  notify: restart postfix
+
+- name: POSTFIX | Render mail service configuration
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: "{{ __postfix_config }}.j2"
+    dest: "/etc/postfix/{{ __postfix_config }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: "{{ postfix_backup }}"
+  loop: [main.cf, master.cf]
+  loop_control:
+    loop_var: __postfix_config
+    label: "{{ __postfix_config }}"
+  notify: restart postfix
+
+- name: POSTFIX | Protect the mail log without changing its contents
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ postfix_log_file }}"
+    owner: root
+    group: root
+    mode: '0600'
+    state: touch
+    access_time: preserve
+    modification_time: preserve
+  when: postfix_log_file | length > 0
+
+- name: POSTFIX | Configure mail log rotation
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: logrotate.j2
+    dest: /etc/logrotate.d/ansible-postfix
+    owner: root
+    group: root
+    mode: '0644'
+    backup: "{{ postfix_backup }}"
+
+- name: POSTFIX | Apply table rebuilds and configuration changes
+  ansible.builtin.meta: flush_handlers
+
+- name: POSTFIX | Enable and start the mail service
+  become: true
+  become_user: root
+  ansible.builtin.service:
+    name: postfix
+    enabled: true
+    state: started

@@ -1,0 +1,10 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+{% for address, name in postfix_sender_relays | dictsort %}
+{% for provider in postfix_providers if provider.name == name %}
+{{ address }} {{ provider.username }}:{{ provider.password }}
+{% endfor %}
+{% endfor %}
+{% for provider in postfix_providers if provider.name == postfix_default_provider %}
+[{{ provider.host }}]:{{ provider.port | default(postfix_provider_port) }} {{ provider.username }}:{{ provider.password }}
+{% endfor %}

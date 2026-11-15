@@ -1,0 +1,185 @@
+---
+# role: postfix
+# file: defaults/main.yml
+
+# Fully qualified hostname announced by the mail server.
+postfix_hostname: "{{ ansible_facts.fqdn }}"
+
+# Domain appended to locally submitted unqualified addresses.
+postfix_origin: $myhostname
+
+# Interfaces used by the standard SMTP and submission listeners.
+postfix_interfaces: [loopback-only]
+
+# IP protocol families enabled by Postfix.
+# Choices: all, ipv4, ipv6
+postfix_protocols: all
+
+# Domains delivered to local Unix accounts through the local delivery agent.
+postfix_local_domains: ['$myhostname', localhost]
+
+# Networks permitted to connect when the standard SMTP listener is restricted.
+postfix_trusted_networks: ['127.0.0.0/8', '[::1]/128']
+
+# Restrict standard SMTP reception to trusted networks; false permits public MX reception.
+postfix_smtp_trusted_only: true
+
+# Local aliases managed separately from distribution aliases.
+postfix_local_aliases:
+  postmaster: root
+
+# Enable the standard SMTP listener on port 25.
+postfix_smtp_enabled: true
+
+# Require TLS and Dovecot authentication on the standard SMTP listener.
+postfix_smtp_auth_required: true
+
+# Enable authenticated submission with mandatory STARTTLS.
+postfix_submission_enabled: false
+
+# Port for authenticated STARTTLS submission.
+postfix_submission_port: 587
+
+# Enable authenticated submission with implicit TLS.
+postfix_submissions_enabled: false
+
+# Port for authenticated implicit TLS submission.
+postfix_submissions_port: 465
+
+# Dovecot authentication socket relative to the Postfix queue directory.
+postfix_dovecot_auth_socket: private/auth
+
+# Certificate chain required by any listener enforcing authentication.
+postfix_tls_certificate: ''
+
+# Private key required by either submission service.
+postfix_tls_private_key: ''
+
+# Additional trusted CA bundle for outgoing TLS; empty uses the platform bundle.
+postfix_tls_ca_file: ''
+
+# Reject SMTP envelope senders that do not belong to the authenticated user.
+postfix_sender_authorization: true
+
+# Unix submitters and their permitted envelope senders; root is trusted.
+postfix_local_submitters:
+  root: ['*']
+
+# Account lookup backend for recipients, aliases and sender ownership.
+# Choices: files, mysql, pgsql
+postfix_account_backend: files
+
+# Domains accepted for virtual mailboxes and delivered through LMTP.
+postfix_virtual_domains: []
+
+# Valid virtual recipient addresses for the text-file backend.
+postfix_mailboxes: []
+# postfix_mailboxes:
+#   - alice@example.org
+
+# Virtual aliases and their destination addresses for the text-file backend.
+postfix_virtual_aliases: {}
+# postfix_virtual_aliases:
+#   sales@example.org: ['alice@example.org']
+
+# Envelope sender addresses and authorized SASL identities for the text-file backend.
+postfix_sender_logins: {}
+# postfix_sender_logins:
+#   alice@example.org: [alice]
+#   sales@example.org: [alice, bob]
+
+# Shared native mysql_table or pgsql_table connection parameters for PostfixAdmin.
+postfix_database: {}
+
+# SQL query overrides for customized PostfixAdmin installations.
+postfix_database_queries: {}
+
+# LMTP destination used for virtual mailbox delivery to Dovecot.
+postfix_dovecot_lmtp_transport: lmtp:unix:private/dovecot-lmtp
+
+# Deliver local Unix mailbox recipients through Dovecot LMTP as well.
+postfix_local_lmtp_enabled: false
+
+# Named external providers with separate credentials and TLS transports.
+postfix_providers: []
+
+# Default external provider port, with optional per-provider overrides.
+postfix_provider_port: 587
+
+# Default external provider TLS mode, with optional per-provider overrides.
+# Choices: starttls, wrapper
+postfix_provider_tls: starttls
+
+# Default provider name; empty permits direct SMTP delivery for unmatched senders.
+postfix_default_provider: ''
+
+# Exact envelope sender addresses mapped to provider names.
+postfix_sender_relays: {}
+
+# Additional recipient domain or address transport routes.
+postfix_transport_maps: {}
+
+# Enable a dedicated trusted SMTP listener for Fetchmail delivery.
+postfix_fetchmail_enabled: false
+
+# Require TLS and Dovecot authentication in addition to trusted Fetchmail sources.
+postfix_fetchmail_auth_required: true
+
+# Numeric interface address for the dedicated Fetchmail listener.
+postfix_fetchmail_address: 127.0.0.1
+
+# Port of the dedicated Fetchmail listener.
+postfix_fetchmail_port: 2525
+
+# Sources permitted on the Fetchmail listener; recipients must still be local.
+postfix_fetchmail_networks: ['127.0.0.1/32', '[::1]/128']
+
+# Envelope senders and their optional outgoing archive copy address.
+postfix_sender_bcc: {}
+
+# Envelope recipients and their optional incoming archive copy address.
+postfix_recipient_bcc: {}
+
+# Maximum accepted message size in bytes.
+postfix_message_size_limit: 10240000
+
+# Maximum time that undelivered messages remain queued.
+postfix_maximal_queue_lifetime: 5d
+
+# Maximum time that undeliverable bounce messages remain queued.
+postfix_bounce_queue_lifetime: 5d
+
+# Minimum delay between delivery retries.
+postfix_minimal_backoff_time: 300s
+
+# Maximum delay between delivery retries.
+postfix_maximal_backoff_time: 4000s
+
+# Interval between deferred-queue scans.
+postfix_queue_run_delay: 300s
+
+# Direct Postfix log file; empty uses the system mail syslog facility.
+postfix_log_file: /var/log/postfix.log
+
+# TLS connection summary logging level.
+# Choices: 0, 1
+postfix_tls_loglevel: 1
+
+# Milter endpoints for incoming SMTP, including DKIM and DMARC filters.
+postfix_smtpd_milters: []
+
+# Milter endpoints for local sendmail submissions.
+postfix_non_smtpd_milters: []
+
+# Milter endpoints for authenticated submission, including signing and From checks.
+postfix_submission_milters: []
+
+# Action when an enabled Milter is unavailable.
+# Choices: tempfail, reject, accept
+postfix_milter_default_action: tempfail
+
+# Policy service endpoints for public SMTP recipient checks, such as SPF.
+postfix_smtp_policy_services: []
+
+# Preserve previous managed files; backups may contain provider credentials.
+postfix_backup: false

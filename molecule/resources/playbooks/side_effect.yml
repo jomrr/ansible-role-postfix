@@ -1,0 +1,53 @@
+---
+# role: postfix
+# file: molecule/resources/playbooks/side_effect.yml
+
+- name: POSTFIX | Exercise SQL backends and configuration recovery
+  hosts: postfix_servers
+  gather_facts: true
+  tasks:
+    - name: POSTFIX | Exercise each PostfixAdmin backend
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/backend.yml"
+      loop: [mysql, pgsql]
+      loop_control:
+        loop_var: __postfix_backend
+
+    - name: POSTFIX | Explicitly allow trusted unauthenticated reception
+      ansible.builtin.include_role:
+        name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+      vars:
+        postfix_account_backend: files
+        postfix_smtp_auth_required: false
+        postfix_fetchmail_auth_required: false
+
+    - name: POSTFIX | Verify explicit unauthenticated reception exceptions
+      become: true
+      become_user: root
+      ansible.builtin.script:
+        cmd: ../tests/smtp_checks.py --trusted-reception
+        executable: python3
+      changed_when: false
+
+    - name: POSTFIX | Introduce an outdated address permission
+      become: true
+      become_user: root
+      ansible.builtin.copy:
+        dest: /etc/postfix/ansible/senders
+        content: "alice@example.test intruder@example.test\n"
+        owner: root
+        group: postfix
+        mode: '0640'
+
+    - name: POSTFIX | Compile the outdated address permission
+      become: true
+      become_user: root
+      ansible.builtin.command:
+        argv: [postmap, /etc/postfix/ansible/senders]
+      changed_when: true
+
+    - name: POSTFIX | Stop the service before the recovery convergence
+      become: true
+      become_user: root
+      ansible.builtin.service:
+        name: postfix
+        state: stopped

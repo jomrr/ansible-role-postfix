@@ -1,0 +1,5 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+{% for address in (postfix_mailboxes + (postfix_sender_logins.keys() | list)) | unique | sort %}
+{{ address }} REJECT Sender address requires authenticated submission
+{% endfor %}

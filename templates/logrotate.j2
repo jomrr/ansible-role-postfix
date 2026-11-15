@@ -1,0 +1,16 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+{% if postfix_log_file %}
+{{ postfix_log_file }} {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0600 root root
+    postrotate
+        /usr/sbin/postfix reload
+    endscript
+}
+{% endif %}

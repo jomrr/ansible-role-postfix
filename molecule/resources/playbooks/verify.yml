@@ -1,0 +1,15 @@
+---
+# role: postfix
+# file: molecule/resources/playbooks/verify.yml
+
+- name: POSTFIX | Verify mail service behavior
+  hosts: postfix_servers
+  gather_facts: false
+  tasks:
+    - name: POSTFIX | Exercise TLS authentication sender policy relays and LMTP delivery
+      become: true
+      become_user: root
+      ansible.builtin.script:
+        cmd: ../tests/smtp_checks.py
+        executable: python3
+      changed_when: false
