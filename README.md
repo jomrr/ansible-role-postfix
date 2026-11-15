@@ -785,7 +785,7 @@ postfix_database_queries: {}
   settings are replaced.
 - `/etc/postfix/master.cf` Role-owned listeners and transports, without chroot,
   including separate provider TLS modes.
-- `/etc/postfix/ansible/` Address tables, compiled indexes and protected SQL
+- `/etc/postfix/managed/` Address tables, compiled indexes and protected SQL
   connection settings.
 - `/etc/logrotate.d/ansible-postfix` Daily rotation retaining fourteen
   compressed logs when postfix_log_file is nonempty.

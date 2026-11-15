@@ -8,7 +8,7 @@
   ansible.builtin.command:
     argv:
       - postmap
-      - "{{ __postfix_table_type.stdout }}:/etc/postfix/ansible/{{ __postfix_result.__postfix_map }}"
+      - "{{ __postfix_table_type.stdout }}:/etc/postfix/managed/{{ __postfix_result.__postfix_map }}"
   loop: "{{ __postfix_map_results.results | selectattr('changed') }}"
   loop_control:
     loop_var: __postfix_result
@@ -20,7 +20,7 @@
   become: true
   become_user: root
   ansible.builtin.command:
-    argv: [postmap, "{{ __postfix_table_type.stdout }}:/etc/postfix/ansible/sasl_passwd"]
+    argv: [postmap, "{{ __postfix_table_type.stdout }}:/etc/postfix/managed/sasl_passwd"]
   no_log: true
   changed_when: true
   listen: rebuild credentials
@@ -29,7 +29,7 @@
   become: true
   become_user: root
   ansible.builtin.command:
-    argv: [postalias, "{{ __postfix_table_type.stdout }}:/etc/postfix/ansible/local_aliases"]
+    argv: [postalias, "{{ __postfix_table_type.stdout }}:/etc/postfix/managed/local_aliases"]
   changed_when: true
   listen: rebuild aliases
 

@@ -11,10 +11,10 @@ inet_protocols = {{ postfix_protocols }}
 mydestination = {{ postfix_local_domains | join(', ') }}
 mynetworks = {{ postfix_trusted_networks | join(', ') }}
 relay_domains =
-alias_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/local_aliases
+alias_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/local_aliases
 alias_database = $alias_maps
 authorized_submit_users = {{ postfix_local_submitters.keys() | join(', ') }}
-local_login_sender_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/local_senders
+local_login_sender_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/local_senders
 
 smtpd_relay_restrictions = {{ 'permit_sasl_authenticated, reject' if postfix_smtp_auth_required else 'reject_unauth_destination' }}
 {% if postfix_smtp_trusted_only %}
@@ -38,24 +38,24 @@ smtpd_tls_auth_only = yes
 {% if postfix_smtp_auth_required %}
 smtpd_sender_restrictions = reject_sender_login_mismatch
 {% elif postfix_account_backend == 'files' %}
-smtpd_sender_restrictions = reject_non_fqdn_sender, check_sender_access {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/protected_senders
+smtpd_sender_restrictions = reject_non_fqdn_sender, check_sender_access {{ __postfix_table_type.stdout }}:/etc/postfix/managed/protected_senders
 {% else %}
-smtpd_sender_restrictions = reject_non_fqdn_sender, check_sender_access proxy:{{ postfix_account_backend }}:/etc/postfix/ansible/protected_senders.cf
+smtpd_sender_restrictions = reject_non_fqdn_sender, check_sender_access proxy:{{ postfix_account_backend }}:/etc/postfix/managed/protected_senders.cf
 {% endif %}
 {% endif %}
 {% if postfix_account_backend == 'files' %}
-smtpd_sender_login_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/senders
-virtual_mailbox_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/mailboxes
-virtual_alias_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/virtual_aliases
+smtpd_sender_login_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/senders
+virtual_mailbox_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/mailboxes
+virtual_alias_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/virtual_aliases
 virtual_mailbox_domains = {{ postfix_virtual_domains | join(', ') }}
 {% else %}
-smtpd_sender_login_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/ansible/senders.cf,
-    proxy:{{ postfix_account_backend }}:/etc/postfix/ansible/alias_domain_senders.cf
-virtual_mailbox_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/ansible/mailboxes.cf
-virtual_alias_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/ansible/virtual_aliases.cf,
-    proxy:{{ postfix_account_backend }}:/etc/postfix/ansible/alias_domains.cf,
-    proxy:{{ postfix_account_backend }}:/etc/postfix/ansible/alias_domain_catchalls.cf
-virtual_mailbox_domains = proxy:{{ postfix_account_backend }}:/etc/postfix/ansible/domains.cf
+smtpd_sender_login_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/managed/senders.cf,
+    proxy:{{ postfix_account_backend }}:/etc/postfix/managed/alias_domain_senders.cf
+virtual_mailbox_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/managed/mailboxes.cf
+virtual_alias_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/managed/virtual_aliases.cf,
+    proxy:{{ postfix_account_backend }}:/etc/postfix/managed/alias_domains.cf,
+    proxy:{{ postfix_account_backend }}:/etc/postfix/managed/alias_domain_catchalls.cf
+virtual_mailbox_domains = proxy:{{ postfix_account_backend }}:/etc/postfix/managed/domains.cf
 {% endif %}
 virtual_alias_domains =
 virtual_transport = {{ postfix_dovecot_lmtp_transport }}
@@ -63,12 +63,12 @@ virtual_transport = {{ postfix_dovecot_lmtp_transport }}
 mailbox_transport = {{ postfix_dovecot_lmtp_transport }}
 {% endif %}
 recipient_delimiter = +
-transport_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/transport
-sender_bcc_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/sender_bcc
-recipient_bcc_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/recipient_bcc
+transport_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/transport
+sender_bcc_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/sender_bcc
+recipient_bcc_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/recipient_bcc
 
-sender_dependent_relayhost_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/sender_relay
-sender_dependent_default_transport_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/sender_transport
+sender_dependent_relayhost_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/sender_relay
+sender_dependent_default_transport_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/sender_transport
 {% if postfix_default_provider %}
 {% for provider in postfix_providers if provider.name == postfix_default_provider %}
 relayhost = [{{ provider.host }}]:{{ provider.port | default(postfix_provider_port) }}
@@ -80,11 +80,11 @@ default_transport = smtp
 {% endif %}
 smtp_sender_dependent_authentication = yes
 smtp_sasl_auth_enable = no
-smtp_sasl_password_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/sasl_passwd
+smtp_sasl_password_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/sasl_passwd
 smtp_sasl_security_options = noanonymous
 smtp_sasl_tls_security_options = noanonymous
 smtp_tls_security_level = may
-smtp_tls_policy_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/tls_policy
+smtp_tls_policy_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/tls_policy
 smtp_tls_CAfile = {{ postfix_tls_ca_file or __postfix_ca_file }}
 smtp_tls_mandatory_protocols = >=TLSv1.2
 smtp_tls_loglevel = {{ postfix_tls_loglevel }}

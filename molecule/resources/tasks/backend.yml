@@ -17,7 +17,7 @@
   become: true
   become_user: root
   ansible.builtin.command:
-    argv: [postmap, -q, "{{ __postfix_lookup.address }}", "{{ __postfix_backend }}:/etc/postfix/ansible/{{ __postfix_lookup.map }}.cf"]
+    argv: [postmap, -q, "{{ __postfix_lookup.address }}", "{{ __postfix_backend }}:/etc/postfix/managed/{{ __postfix_lookup.map }}.cf"]
   loop:
     - {map: domains, address: disabled.test, expected: ''}
     - {map: domains, address: backup.test, expected: ''}

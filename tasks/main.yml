@@ -46,7 +46,7 @@
   become: true
   become_user: root
   ansible.builtin.file:
-    path: /etc/postfix/ansible
+    path: /etc/postfix/managed
     owner: root
     group: postfix
     mode: '0755'
@@ -57,7 +57,7 @@
   become_user: root
   ansible.builtin.template:
     src: "{{ __postfix_map }}.j2"
-    dest: "/etc/postfix/ansible/{{ __postfix_map }}"
+    dest: "/etc/postfix/managed/{{ __postfix_map }}"
     owner: root
     group: postfix
     mode: "{{ '0644' if __postfix_map == 'local_senders' else '0640' }}"
@@ -76,7 +76,7 @@
   become_user: root
   ansible.builtin.template:
     src: sasl_passwd.j2
-    dest: /etc/postfix/ansible/sasl_passwd
+    dest: /etc/postfix/managed/sasl_passwd
     owner: root
     group: root
     mode: '0600'
@@ -91,7 +91,7 @@
   become_user: root
   ansible.builtin.template:
     src: local_aliases.j2
-    dest: /etc/postfix/ansible/local_aliases
+    dest: /etc/postfix/managed/local_aliases
     owner: root
     group: root
     mode: '0644'
@@ -105,7 +105,7 @@
   become_user: root
   ansible.builtin.template:
     src: database.cf.j2
-    dest: "/etc/postfix/ansible/{{ __postfix_database_query.key }}.cf"
+    dest: "/etc/postfix/managed/{{ __postfix_database_query.key }}.cf"
     owner: root
     group: postfix
     mode: '0640'
@@ -122,7 +122,7 @@
   become: true
   become_user: root
   ansible.builtin.file:
-    path: "/etc/postfix/ansible/{{ __postfix_map }}.cf"
+    path: "/etc/postfix/managed/{{ __postfix_map }}.cf"
     state: absent
   loop: "{{ __postfix_database_queries.keys() }}"
   loop_control:
