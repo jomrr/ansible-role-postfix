@@ -197,6 +197,11 @@ argument_specs:
         type: dict
         default: {}
         description: Additional recipient domain or address transport routes.
+      postfix_tls_policies:
+        type: dict
+        default: {}
+        description: SMTP next-hop destinations mapped to TLS security policies and optional
+          certificate matching attributes.
       postfix_fetchmail_enabled:
         type: bool
         default: false

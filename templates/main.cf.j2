@@ -84,6 +84,7 @@ smtp_sasl_password_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible
 smtp_sasl_security_options = noanonymous
 smtp_sasl_tls_security_options = noanonymous
 smtp_tls_security_level = may
+smtp_tls_policy_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/ansible/tls_policy
 smtp_tls_CAfile = {{ postfix_tls_ca_file or __postfix_ca_file }}
 smtp_tls_mandatory_protocols = >=TLSv1.2
 smtp_tls_loglevel = {{ postfix_tls_loglevel }}

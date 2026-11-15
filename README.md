@@ -484,6 +484,19 @@ Default:
 postfix_transport_maps: {}
 ```
 
+### `postfix_tls_policies`
+
+Type: `dict`. Required: `false`.
+
+SMTP next-hop destinations mapped to TLS security policies and optional
+certificate matching attributes.
+
+Default:
+
+```yaml
+postfix_tls_policies: {}
+```
+
 ### `postfix_fetchmail_enabled`
 
 Type: `bool`. Required: `false`.
@@ -823,9 +836,10 @@ the service is enabled and started on every converge.
   files are root:postfix 0640. Secret-bearing tasks and argument values are
   redacted. Use Ansible Vault or an external secret lookup for credential
   values.
-- Enabled provider relays require trusted TLS with hostname verification. Direct
-  delivery uses opportunistic TLS for Internet interoperability. Milter failures
-  temporarily reject mail by default.
+- Provider relays default to trusted TLS with hostname verification. Direct
+  delivery defaults to opportunistic TLS for Internet interoperability.
+  postfix_tls_policies overrides the TLS policy for matching next-hop
+  destinations. Milter failures temporarily reject mail by default.
 - Archive copies contain full messages and require separately authorized archive
   recipients and retention policies. Native SMTP logs include addressing and
   delivery metadata but do not enable protocol or password debug logging.
@@ -860,6 +874,13 @@ the service is enabled and started on every converge.
   Sender-specific credentials support different accounts at the same relay host.
   An empty postfix_default_provider allows unmatched senders to use direct SMTP
   delivery.
+- postfix_tls_policies maps SMTP next-hop destinations to native Postfix TLS
+  policies. Keys must match the configured next hop, including brackets and an
+  explicit port, for example "[mail.example.org]:25". The value "secure
+  match=mail.example.org" requires TLS, a trusted certificate chain and the
+  specified certificate name. Trust uses postfix_tls_ca_file or the platform CA
+  bundle. An empty dictionary preserves the transport TLS defaults. The table
+  applies to standard SMTP and provider transports.
 - postfix_fetchmail_networks controls the dedicated listener independently of
   postfix_trusted_networks. Fetchmail cannot relay to external recipients.
   Fetchmail must use STARTTLS and SMTP AUTH by default.
@@ -932,6 +953,37 @@ listeners requires Dovecot and TLS material with the default policy.
   roles:
     - role: jomrr.postfix
       postfix_smtp_enabled: false
+```
+
+### Null client with verified TLS to a relay
+
+Forward all locally submitted mail to a central relay without local
+mailbox delivery or TCP listeners. The relay must permit this client's
+source address without SMTP AUTH. Only root may submit by default;
+authorize application users through postfix_local_submitters as needed.
+Dovecot and a local server certificate are not required for this setup.
+
+The relay must advertise STARTTLS and present a trusted certificate for
+mail.example.org. Set postfix_tls_ca_file when using a private CA.
+Unavailable TLS or failed certificate validation defers delivery; Postfix
+does not fall back to plaintext. The policy key matches the transport
+next hop exactly, including brackets and port.
+
+```yaml
+---
+- name: Configure a null client
+  hosts: nullclients
+  gather_facts: true
+  roles:
+    - role: jomrr.postfix
+      postfix_hostname: app.example.org
+      postfix_origin: example.org
+      postfix_smtp_enabled: false
+      postfix_local_domains: []
+      postfix_transport_maps:
+        '*': 'smtp:[mail.example.org]:25'
+      postfix_tls_policies:
+        '[mail.example.org]:25': 'secure match=mail.example.org'
 ```
 
 ### File accounts with Dovecot and two provider identities
@@ -1013,6 +1065,8 @@ postfix_database:
 
 - [Postfix SASL](https://www.postfix.org/SASL_README.html)
 - [Postfix TLS](https://www.postfix.org/TLS_README.html)
+- [Postfix TLS policy maps](https://www.postfix.org/postconf.5.html#smtp_tls_policy_maps)
+- [Postfix null client](https://www.postfix.org/STANDARD_CONFIGURATION_README.html#null_client)
 - [Postfix lookup proxy](https://www.postfix.org/proxymap.8.html)
 - [PostfixAdmin SQL integration](https://github.com/postfixadmin/postfixadmin/blob/master/DOCUMENTS/POSTFIX_CONF.txt)
 - [Dovecot SASL](https://doc.dovecot.org/main/howto/sasl/postfix.html)

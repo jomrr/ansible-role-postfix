@@ -1,0 +1,5 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+{% for destination, policy in postfix_tls_policies | dictsort %}
+{{ destination }} {{ policy }}
+{% endfor %}

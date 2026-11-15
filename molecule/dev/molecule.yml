@@ -38,6 +38,8 @@ provisioner:
         postfix_tls_certificate: "/etc/postfix-test/server.crt"
         postfix_tls_private_key: "/etc/postfix-test/server.key"
         postfix_tls_ca_file: "/etc/postfix-test/server.crt"
+        postfix_tls_policies:
+          '[127.0.0.1]:1587': "secure match=localhost"
         postfix_virtual_domains:
           - "example.test"
         postfix_mailboxes:
@@ -63,7 +65,7 @@ provisioner:
             - "local@example.test"
         postfix_providers:
           - name: "a"
-            host: "localhost"
+            host: "127.0.0.1"
             port: 1587
             username: "provider-a"
             password: "relay-a-secret"

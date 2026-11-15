@@ -13,6 +13,7 @@ __postfix_maps:
   - sender_bcc
   - recipient_bcc
   - transport
+  - tls_policy
 
 __postfix_database_queries:
   domains: >-

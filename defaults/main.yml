@@ -119,6 +119,11 @@ postfix_sender_relays: {}
 # Additional recipient domain or address transport routes.
 postfix_transport_maps: {}
 
+# SMTP next-hop destinations mapped to TLS security policies and optional certificate matching attributes.
+postfix_tls_policies: {}
+# postfix_tls_policies:
+#   "[mail.example.org]:25": "secure match=mail.example.org"
+
 # Enable a dedicated trusted SMTP listener for Fetchmail delivery.
 postfix_fetchmail_enabled: false
 
