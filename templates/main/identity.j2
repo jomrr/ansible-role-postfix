@@ -1,0 +1,8 @@
+compatibility_level = {{ postfix_compatibility_level }}
+default_database_type = {{ __postfix_table_type }}
+setgid_group = {{ __postfix_setgid_group }}
+myhostname = {{ postfix_hostname }}
+myorigin = {{ postfix_origin }}
+inet_interfaces = {{ postfix_interfaces | join(', ') }}
+inet_protocols = {{ postfix_protocols }}
+mynetworks = {{ postfix_trusted_networks | join(', ') }}

@@ -7,9 +7,12 @@
     name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   vars:
     postfix_account_backend: "{{ __postfix_backend }}"
+    postfix_mailboxes: []
     postfix_ldap_enabled: "{{ __postfix_backend == 'pgsql' }}"
     postfix_sasl_access_enabled: "{{ postfix_ldap_enabled }}"
     postfix_sasl_access_logins: [bob@example.test]
+    postfix_virtual_aliases:
+      file-only@example.test: [bob@example.test]
     postfix_sender_logins:
       root@app.example.test: [bob@example.test]
       outsider-owned@example.test: [outsider@example.test]
@@ -43,11 +46,18 @@
 - name: POSTFIX | Exercise SQL-backed authentication policy and delivery
   become: true
   become_user: root
-  ansible.builtin.script:
-    cmd: ../tests/smtp_checks.py --accounts
-    executable: python3
+  ansible.builtin.command:
+    cmd: python3 /etc/postfix-test/smtp_checks.py --accounts
   changed_when: false
 
 - name: POSTFIX | Exercise directory eligibility and TLS with the PostgreSQL lookup chain
   ansible.builtin.include_tasks: ldap.yml
   when: __postfix_backend == 'pgsql'
+
+- name: POSTFIX | Exercise TLS submission, relays and queue retries on the installed mail servers
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    cmd: python3 /etc/postfix-test/smtp_checks.py
+  changed_when: false
+  when: __postfix_backend == 'mysql'

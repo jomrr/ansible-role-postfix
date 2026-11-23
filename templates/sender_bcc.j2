@@ -1,5 +1,0 @@
-# Managed by ansible.
-# file: {{ template_destpath }}
-{% for address, destination in postfix_sender_bcc | dictsort %}
-{{ address }} {{ destination }}
-{% endfor %}

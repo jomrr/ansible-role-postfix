@@ -1,0 +1,79 @@
+---
+# role: postfix
+# file: molecule/resources/vars/mail.yml
+
+postfix_hostname: mail.example.test
+postfix_protocols: ipv4
+postfix_tls_certificate: /etc/postfix-test/server.crt
+postfix_tls_private_key: /etc/postfix-test/server.key
+postfix_tls_ca_file: /etc/postfix-test/server.crt
+postfix_tls_policies:
+  '[127.0.0.1]:1587': secure match=localhost
+postfix_mailboxes:
+  - alice@example.test
+  - bob@example.test
+  - archive@example.test
+postfix_virtual_aliases:
+  sales@example.test:
+    - alice@example.test
+    - bob@example.test
+postfix_sender_logins:
+  alice@example.test:
+    - alice@example.test
+  bob@example.test:
+    - bob@example.test
+  sales@example.test:
+    - alice@example.test
+    - bob@example.test
+postfix_local_submitters:
+  root:
+    - '*'
+  postfix_test:
+    - local@example.test
+  vmail:
+    - <>
+    - bob@example.test
+postfix_providers:
+  - name: a
+    host: 127.0.0.1
+    port: 1587
+    username: provider-a
+    password: relay-a-secret
+  - name: b
+    host: localhost
+    port: 1465
+    tls: wrapper
+    username: provider-b
+    password: relay-b-secret
+postfix_sender_relays:
+  alice@example.test: a
+  bob@example.test: b
+  sales@example.test: a
+postfix_sender_bcc:
+  alice@example.test: archive@example.test
+postfix_recipient_bcc:
+  bob@example.test: archive@example.test
+postfix_minimal_backoff_time: 1s
+postfix_maximal_backoff_time: 2s
+postfix_queue_run_delay: 1s
+postfix_virtual_mailbox_domains:
+  - example.test
+postfix_outbound: direct
+postfix_log_file: /var/log/postfix.log
+postfix_listeners:
+  smtp:
+    port: 25
+    clients:
+      - 127.0.0.0/8
+  submission:
+    port: 1588
+  submissions:
+    port: 1466
+    tls: wrapper
+  fetchmail:
+    port: 2525
+    address: 127.0.0.1
+    clients:
+      - 127.0.0.1/32
+    relay: none
+    sender_login_match: false

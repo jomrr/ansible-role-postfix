@@ -1,0 +1,17 @@
+{% if postfix_outbound == 'none' %}
+default_transport = error:5.7.1 External delivery disabled
+{% elif postfix_outbound == 'relayhost' %}
+relayhost = [{{ postfix_relayhost.host }}]:{{ postfix_relayhost.port | default(25) }}
+default_transport = managed_relay
+{% elif postfix_default_provider %}
+{% for provider in postfix_providers if provider.name == postfix_default_provider %}
+relayhost = [{{ provider.host }}]:{{ provider.port | default(postfix_provider_port) }}
+default_transport = provider_{{ provider.name }}
+{% endfor %}
+{% else %}
+default_transport = smtp
+{% endif %}
+smtp_sender_dependent_authentication = yes
+smtp_sasl_auth_enable = no
+smtp_sasl_security_options = noanonymous
+smtp_sasl_tls_security_options = noanonymous

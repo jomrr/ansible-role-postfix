@@ -1,51 +1,29 @@
+{% filter postfix_unique_services %}
 # Managed by ansible.
 # file: {{ template_destpath }}
 
-# All services run without a chroot so native SQL and CA paths remain available.
-{% if postfix_smtp_enabled %}
-smtp inet n - n - - smtpd
-  -o milter_macro_daemon_name={{ 'ORIGINATING' if postfix_smtp_auth_required else 'INBOUND' }}
-{% if postfix_smtp_auth_required %}
-  -o smtpd_milters={{ postfix_submission_milters | join(',') }}
+{% for service in __postfix_listeners %}
+{% if service.postscreen %}
+{{ service.bind }} inet n - n - 1 postscreen
+  -o smtpd_service_name=screen_{{ service.name }}
+  -o tlsproxy_service_name=tls_{{ service.name }}
+  -o postscreen_tls_security_level={{ service.tls }}
+  -o postscreen_greet_action=enforce
+  -o postscreen_greet_wait={{ service.wait }}
+  -o { postscreen_dnsbl_sites = {{ service.dnsbl | join(', ') }} }
+  -o postscreen_dnsbl_action=enforce
+tls_{{ service.name }} unix - - n - 0 tlsproxy
+  -o smtpd_tls_security_level={{ service.tls }}
+screen_{{ service.name }} pass - - n - - smtpd
 {% else %}
-  -o smtpd_relay_restrictions=reject_unauth_destination
+{{ service.bind }} inet n - n - - smtpd
 {% endif %}
-{% endif %}
-{% if postfix_submission_enabled %}
-{{ postfix_submission_port }} inet n - n - - smtpd
-  -o syslog_name=postfix/submission
-  -o smtpd_tls_security_level=encrypt
-  -o smtpd_sasl_auth_enable=yes
-  -o smtpd_recipient_restrictions=
-  -o smtpd_client_restrictions=
-  -o smtpd_sender_restrictions={{ 'reject_sender_login_mismatch' if postfix_sender_authorization else '' }}
-  -o smtpd_milters={{ postfix_submission_milters | join(',') }}
-{% endif %}
-{% if postfix_submissions_enabled %}
-{{ postfix_submissions_port }} inet n - n - - smtpd
-  -o syslog_name=postfix/submissions
-  -o smtpd_tls_wrappermode=yes
-  -o smtpd_sasl_auth_enable=yes
-  -o smtpd_recipient_restrictions=
-  -o smtpd_client_restrictions=
-  -o smtpd_sender_restrictions={{ 'reject_sender_login_mismatch' if postfix_sender_authorization else '' }}
-  -o smtpd_milters={{ postfix_submission_milters | join(',') }}
-{% endif %}
-{% if postfix_fetchmail_enabled %}
-{{ postfix_fetchmail_address }}:{{ postfix_fetchmail_port }} inet n - n - - smtpd
-  -o syslog_name=postfix/fetchmail
-  -o smtpd_sasl_auth_enable={{ 'yes' if postfix_fetchmail_auth_required else 'no' }}
-  -o smtpd_tls_security_level={{ 'encrypt' if postfix_fetchmail_auth_required else ('may' if postfix_tls_certificate else 'none') }}
-  -o mynetworks={{ postfix_fetchmail_networks | join(',') }}
-  -o smtpd_client_restrictions=permit_mynetworks,reject
-{% if postfix_fetchmail_auth_required %}
-  -o smtpd_recipient_restrictions=reject_unauth_destination
-{% else %}
-  -o smtpd_relay_restrictions=reject_unauth_destination
-  -o smtpd_recipient_restrictions=reject_unlisted_recipient
-{% endif %}
-  -o smtpd_sender_restrictions=
-  -o milter_macro_daemon_name=INBOUND
+{% for parameter, value in service.options.items() %}
+  -o { {{ parameter }} = {{ value }} }
+{% endfor %}
+{% endfor %}
+{% if __postfix_listeners | selectattr('postscreen') | length %}
+dnsblog unix - - n - 0 dnsblog
 {% endif %}
 pickup unix n - n 60 1 pickup
 cleanup unix n - n - 0 cleanup
@@ -59,8 +37,8 @@ verify unix - - n - 1 verify
 flush unix n - n 1000? 0 flush
 proxymap unix - - n - - proxymap
 proxywrite unix - - n - 1 proxymap
-smtp unix - - n - - smtp
-relay unix - - n - - smtp
+smtp unix - - n - - {{ 'error' if postfix_outbound == 'none' else 'smtp' }}
+relay unix - - n - - {{ 'error' if postfix_outbound == 'none' else 'smtp' }}
 showq unix n - n - - showq
 error unix - - n - - error
 retry unix - - n - - error
@@ -78,3 +56,16 @@ provider_{{ provider.name }} unix - - n - - smtp
   -o smtp_tls_security_level=secure
   -o smtp_tls_wrappermode={{ 'yes' if provider.tls | default(postfix_provider_tls) == 'wrapper' else 'no' }}
 {% endfor %}
+{% if postfix_outbound == 'relayhost' %}
+managed_relay unix - - n - - smtp
+  -o smtp_sasl_auth_enable={{ 'yes' if postfix_relayhost.get('username') else 'no' }}
+  -o smtp_tls_security_level={{ 'secure' if postfix_relayhost.get('tls') == 'wrapper' else postfix_relayhost.get('tls', 'secure') }}
+  -o smtp_tls_wrappermode={{ 'yes' if postfix_relayhost.get('tls') == 'wrapper' else 'no' }}
+{% endif %}
+{% for service in postfix_master_cf %}
+{{ service.name }} {{ service.type }} {{ service.private | default('-') }} {{ service.unprivileged | default('-') }} {{ service.chroot | default('n') }} {{ service.wakeup | default('-') }} {{ service.limit | default('-') }} {{ service.command }}
+{% for parameter, value in (service.options | default({}) | postfix_clean_options).items() %}
+  -o { {{ parameter }} = {{ value }} }
+{% endfor %}
+{% endfor %}
+{% endfilter -%}

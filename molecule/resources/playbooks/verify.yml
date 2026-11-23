@@ -2,14 +2,13 @@
 # role: postfix
 # file: molecule/resources/playbooks/verify.yml
 
-- name: POSTFIX | Verify mail service behavior
+- name: POSTFIX | Verify return to a closed default installation
   hosts: postfix_servers
   gather_facts: false
   tasks:
-    - name: POSTFIX | Exercise TLS authentication sender policy relays and LMTP delivery
+    - name: POSTFIX | Verify the running service and closed network policy
       become: true
       become_user: root
-      ansible.builtin.script:
-        cmd: ../tests/smtp_checks.py
-        executable: python3
+      ansible.builtin.command:
+        argv: [python3, /etc/postfix-test/operating_modes.py, closed]
       changed_when: false

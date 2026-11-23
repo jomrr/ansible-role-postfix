@@ -1,0 +1,25 @@
+---
+# role: postfix
+# file: molecule/resources/vars/dovecot.yml
+
+dovecot_postmaster_address: postmaster@example.test
+dovecot_hostname: mail.example.test
+dovecot_mail_root: /var/lib/postfix-test/mail
+dovecot_mail_ownership: shared
+dovecot_users:
+  - name: alice@example.test
+    password_hash: '{SHA512-CRYPT}$6$postfixtest$Mj2Fquva3aGn/1io6CSVYYPDdW/RP/bwDwS7VSj0syRdh7h1Y71K.3puY.qb9oFqCcqmM7SBAduP1fu3MMpLc0'
+  - name: bob@example.test
+    password_hash: '{SHA512-CRYPT}$6$postfixtest$OoFYvgDLKdgJPqE7i/Ah5fQ6JL3v9uTBaC1hmslRHcY.HRHgfv.lfqAJ.JwP1kYOaWQYoFfpw2kT5U6FJzE8m/'
+  - name: archive@example.test
+    password_hash: '{SHA512-CRYPT}$6$postfixtest$YHWh90z6.ItFhhjce9t2JAlPM9Rf9WnSHg2lY8VKLN.HejNuLyEMPLTtsSQHmKA4PRdC.bQYswtWmXayi7JfJ0'
+dovecot_sasl_users:
+  - name: outsider@example.test
+    password_hash: '{SHA512-CRYPT}$6$postfixtest$lJfdAlfuKD/wzYnjpHsjg0N7GW/zssB9TsrD/QWDpAZ8Y2XvhiOfpmpz6dnu5D71v9SC4yKT/gO0HSY2K5sRR/'
+  - name: disabled@example.test
+    password_hash: '{SHA512-CRYPT}$6$postfixtest$B0rG9nyT5dNnjbfe/G.DVtSbSTdtTXmAOCVN2VQo4e2A/p0vbPp/jBgU5C489FyWfwwX8Axs9esYwQmGouiYe0'
+dovecot_sieve_before: |
+  require ["vacation"];
+  if allof (address :is "to" "bob@example.test", header :is "Subject" "Postfix vacation test") {
+    vacation :days 1 :addresses ["bob@example.test"] "Postfix vacation reply";
+  }

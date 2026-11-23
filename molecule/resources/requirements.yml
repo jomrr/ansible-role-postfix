@@ -1,0 +1,14 @@
+---
+# role: postfix
+# file: molecule/resources/requirements.yml
+
+roles:
+  - name: jomrr.postfix_test_dovecot
+    src: https://github.com/jomrr/ansible-role-dovecot.git
+    scm: git
+    version: fe24f50948075da35cc73443661d9a592e741d22
+collections:
+  - name: community.general
+    version: '>=12.0.0'
+  - name: containers.podman
+    version: '>=1.20.0'

@@ -1,9 +1,8 @@
 # Managed by ansible.
 # file: {{ template_destpath }}
-{% if postfix_log_file %}
 {{ postfix_log_file }} {
-    daily
-    rotate 14
+    {{ postfix_logrotate_interval }}
+    rotate {{ postfix_logrotate_count }}
     missingok
     notifempty
     compress
@@ -13,4 +12,3 @@
         /usr/sbin/postfix reload
     endscript
 }
-{% endif %}

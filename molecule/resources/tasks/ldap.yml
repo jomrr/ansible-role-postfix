@@ -5,9 +5,8 @@
 - name: POSTFIX | Check AD group, disabled users, login ownership and file relay exceptions
   become: true
   become_user: root
-  ansible.builtin.script:
-    cmd: "../tests/smtp_checks.py --envelopes {{ __postfix_envelopes | to_json | quote }}"
-    executable: python3
+  ansible.builtin.command:
+    cmd: "python3 /etc/postfix-test/operating_modes.py directory --cases {{ __postfix_envelopes | to_json | quote }}"
   vars:
     __postfix_envelopes:
       - [25, outsider, '', bob@example.test, 5]
@@ -46,10 +45,9 @@
 - name: POSTFIX | Defer submission by an eligible login with untrusted directory TLS
   become: true
   become_user: root
-  ansible.builtin.script:
+  ansible.builtin.command:
     cmd: >-
-      ../tests/smtp_checks.py --envelopes '[[1588, "alice", "", "bob@example.test", 4]]'
-    executable: python3
+      python3 /etc/postfix-test/operating_modes.py envelopes --cases '[[1588, "alice", "", "bob@example.test", 4]]'
   changed_when: false
 
 - name: POSTFIX | Restore directory trust for public SMTP reception

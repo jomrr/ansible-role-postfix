@@ -5,7 +5,8 @@
 dependency:
   name: "galaxy"
   options:
-    requirements-file: "${MOLECULE_PROJECT_DIRECTORY}/collections.yml"
+    role-file: "${MOLECULE_PROJECT_DIRECTORY}/molecule/resources/requirements.yml"
+    requirements-file: "${MOLECULE_PROJECT_DIRECTORY}/molecule/resources/requirements.yml"
 driver:
   name: "podman"
 provisioner:
@@ -22,67 +23,6 @@ provisioner:
     group_vars:
       all:
         ansible_podman_mount_detection: false
-      postfix_servers:
-        postfix_hostname: "mail.example.test"
-        postfix_protocols: "ipv4"
-        postfix_submission_enabled: true
-        postfix_submission_port: 1588
-        postfix_submissions_enabled: true
-        postfix_submissions_port: 1466
-        postfix_fetchmail_enabled: true
-        postfix_dovecot_auth_socket: "/var/lib/postfix-test/auth"
-        postfix_dovecot_lmtp_transport: "lmtp:unix:/var/lib/postfix-test/lmtp"
-        postfix_tls_certificate: "/etc/postfix-test/server.crt"
-        postfix_tls_private_key: "/etc/postfix-test/server.key"
-        postfix_tls_ca_file: "/etc/postfix-test/server.crt"
-        postfix_tls_policies:
-          '[127.0.0.1]:1587': "secure match=localhost"
-        postfix_virtual_domains:
-          - "example.test"
-        postfix_mailboxes:
-          - "alice@example.test"
-          - "bob@example.test"
-          - "archive@example.test"
-        postfix_virtual_aliases:
-          sales@example.test:
-            - "alice@example.test"
-            - "bob@example.test"
-        postfix_sender_logins:
-          alice@example.test:
-            - "alice@example.test"
-          bob@example.test:
-            - "bob@example.test"
-          sales@example.test:
-            - "alice@example.test"
-            - "bob@example.test"
-        postfix_local_submitters:
-          root:
-            - "*"
-          postfix_test:
-            - "local@example.test"
-        postfix_providers:
-          - name: "a"
-            host: "127.0.0.1"
-            port: 1587
-            username: "provider-a"
-            password: "relay-a-secret"
-          - name: "b"
-            host: "localhost"
-            port: 1465
-            tls: "wrapper"
-            username: "provider-b"
-            password: "relay-b-secret"
-        postfix_sender_relays:
-          alice@example.test: "a"
-          bob@example.test: "b"
-          sales@example.test: "a"
-        postfix_sender_bcc:
-          alice@example.test: "archive@example.test"
-        postfix_recipient_bcc:
-          bob@example.test: "archive@example.test"
-        postfix_minimal_backoff_time: "1s"
-        postfix_maximal_backoff_time: "2s"
-        postfix_queue_run_delay: "1s"
   log: true
   playbooks:
     prepare: "../resources/playbooks/prepare.yml"
@@ -125,7 +65,7 @@ platforms:
     override_command: false
     network: "postfix-${MOLECULE_SCENARIO_NAME}"
     groups:
-      - "postfix_dependencies"
+      - "postfix_mysql"
     env:
       MARIADB_ROOT_PASSWORD: "molecule-database-secret"
       MARIADB_DATABASE: "postfixadmin"
@@ -135,7 +75,7 @@ platforms:
     override_command: false
     network: "postfix-${MOLECULE_SCENARIO_NAME}"
     groups:
-      - "postfix_dependencies"
+      - "postfix_pgsql"
     env:
       POSTGRES_PASSWORD: "molecule-database-secret"
       POSTGRES_DB: "postfixadmin"

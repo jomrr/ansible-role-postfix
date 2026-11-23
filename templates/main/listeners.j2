@@ -1,0 +1,47 @@
+smtpd_relay_restrictions = reject_unauth_destination
+smtpd_sasl_auth_enable = no
+smtpd_sasl_type = {{ postfix_sasl_type }}
+smtpd_sasl_path = {{ postfix_dovecot_auth_socket if postfix_sasl_type == 'dovecot' else postfix_cyrus_sasl_path }}
+smtpd_sasl_security_options = noanonymous
+smtpd_tls_auth_only = yes
+smtpd_tls_security_level = none
+smtpd_helo_required = yes
+disable_vrfy_command = yes
+{% if __postfix_newline_support.stdout %}
+smtpd_forbid_bare_newline = {{ postfix_forbid_bare_newline }}
+smtpd_forbid_bare_newline_exclusions = {{ postfix_bare_newline_exclusions | join(', ') }}
+{% endif %}
+smtpd_client_auth_rate_limit = {{ postfix_client_auth_rate_limit }}
+smtpd_client_connection_rate_limit = {{ postfix_client_connection_rate_limit }}
+smtpd_client_connection_count_limit = {{ postfix_client_connection_count_limit }}
+{% if __postfix_listeners | selectattr('auth','equalto','required') | length %}
+managed_sasl_gate = {% if postfix_sasl_access_enabled %}check_sasl_access $managed_sasl_map, {% if postfix_ldap_enabled %}check_sasl_access proxy:ldap:{{ __postfix_dir }}/ldap-sasl_access.cf, {% endif %}{% else %}permit_sasl_authenticated, {% endif %}reject
+{% endif %}
+{% if __postfix_listeners | selectattr('protect') | length %}
+managed_sender_protection = check_sender_access $managed_protected_map
+{% if postfix_account_backend != 'files' %}
+    check_sender_access proxy:{{ postfix_account_backend }}:{{ __postfix_dir }}/protected_senders.cf
+{% endif %}
+{% if postfix_ldap_enabled %}
+    check_sender_access proxy:ldap:{{ __postfix_dir }}/ldap-protected_senders.cf
+{% endif %}
+{% endif %}
+{% if (postfix_ldap_enabled or postfix_account_backend != 'files') %}
+proxy_read_maps = {{ __postfix_native.stdout_lines[2] }}
+{% if postfix_ldap_enabled and postfix_sasl_access_enabled %}
+    proxy:ldap:{{ __postfix_dir }}/ldap-sasl_access.cf
+{% endif %}
+{% if __postfix_listeners | selectattr('protect') | length %}
+{% if postfix_account_backend != 'files' %}
+    proxy:{{ postfix_account_backend }}:{{ __postfix_dir }}/protected_senders.cf
+{% endif %}
+{% if postfix_ldap_enabled %}
+    proxy:ldap:{{ __postfix_dir }}/ldap-protected_senders.cf
+{% endif %}
+{% endif %}
+{% endif %}
+{% for service in __postfix_listeners %}
+{% for key, rules in service.policy.items() %}
+managed_{{ service.name }}_{{ key }} = {{ rules | join(', ') }}
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,5 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+{% for key, value in __postfix_tables[__postfix_map].entries.items() %}
+{{ key }}{{ ': ' if __postfix_tables[__postfix_map].aliases else ' ' }}{{ value }}
+{% endfor %}

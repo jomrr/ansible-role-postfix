@@ -2,18 +2,72 @@
 # role: postfix
 # file: vars/main.yml
 
-__postfix_maps:
-  - mailboxes
-  - virtual_aliases
-  - senders
-  - protected_senders
-  - local_senders
-  - sender_relay
-  - sender_transport
-  - sender_bcc
-  - recipient_bcc
-  - transport
-  - tls_policy
+__postfix_dir: /etc/postfix/managed
+__postfix_listeners: "{{ postfix_listeners | postfix_listener_services(postfix_outbound) }}"
+__postfix_provider_tables: >-
+  {{ postfix_providers | postfix_provider_tables(postfix_sender_relays, postfix_provider_port, postfix_default_provider, postfix_relayhost) }}
+__postfix_builtin_tables:
+  local_aliases:
+    parameter: alias_maps
+    entries: "{{ postfix_local_aliases }}"
+    aliases: true
+    mode: '0644'
+  local_senders:
+    parameter: local_login_sender_maps
+    entries: "{{ postfix_local_submitters }}"
+    mode: '0644'
+  mailboxes:
+    parameter: virtual_mailbox_maps
+    entries: "{{ dict(postfix_mailboxes | zip_longest([], fillvalue='OK')) }}"
+  virtual_aliases:
+    parameter: virtual_alias_maps
+    entries: "{{ postfix_virtual_aliases }}"
+  senders:
+    parameter: smtpd_sender_login_maps
+    entries: "{{ postfix_sender_logins }}"
+  protected_senders:
+    parameter: "{{ 'managed_protected_map' if __postfix_listeners | selectattr('protect') | length else '' }}"
+    entries: >-
+      {{ dict((postfix_mailboxes + (postfix_sender_logins | list))
+         | zip_longest([], fillvalue='REJECT Sender address requires authenticated submission')) }}
+  sasl_access:
+    parameter: "{{ 'managed_sasl_map' if postfix_sasl_access_enabled and __postfix_listeners | selectattr('auth', 'equalto', 'required') | length else '' }}"
+    entries: "{{ dict(postfix_sasl_access_logins | zip_longest([], fillvalue='OK')) }}"
+  sender_relay:
+    parameter: sender_dependent_relayhost_maps
+    entries: "{{ __postfix_provider_tables.sender_relay }}"
+  sender_transport:
+    parameter: sender_dependent_default_transport_maps
+    entries: "{{ __postfix_provider_tables.sender_transport }}"
+  sasl_passwd:
+    parameter: smtp_sasl_password_maps
+    entries: "{{ __postfix_provider_tables.sasl_passwd }}"
+    secret: true
+  sender_bcc:
+    parameter: sender_bcc_maps
+    entries: "{{ postfix_sender_bcc }}"
+  recipient_bcc:
+    parameter: recipient_bcc_maps
+    entries: "{{ postfix_recipient_bcc }}"
+  transport:
+    parameter: transport_maps
+    entries: "{{ postfix_transport_maps }}"
+  tls_policy:
+    parameter: smtp_tls_policy_maps
+    entries: "{{ postfix_tls_policies }}"
+  relay_recipients:
+    parameter: relay_recipient_maps
+    entries: "{{ dict(postfix_relay_recipients | zip_longest([], fillvalue='OK')) }}"
+
+__postfix_table_type: >-
+  {{ ([__postfix_native.stdout_lines[0], 'lmdb', 'cdb', 'hash', 'btree'] | select('in', __postfix_drivers.stdout_lines) | first) }}
+__postfix_tables: "{{ __postfix_builtin_tables | postfix_table_catalog(postfix_tables, __postfix_table_type) }}"
+__postfix_map_parameters: >-
+  {{ __postfix_tables | postfix_map_parameters(postfix_account_backend, postfix_ldap_enabled, postfix_ldap_alias_queries, postfix_tls_policy_maps) }}
+__postfix_ldap_domains: "{{ (postfix_virtual_mailbox_domains + postfix_virtual_alias_domains + postfix_ldap_address_domains) | unique }}"
+__postfix_ldap_names: >-
+  {{ (__postfix_ldap_maps | selectattr('enabled') | map(attribute='name') | list)
+     + (postfix_ldap_alias_queries | map('regex_replace', '^', 'alias-') | list if postfix_ldap_enabled else []) }}
 
 __postfix_ldap_maps:
   - name: mailboxes
@@ -32,7 +86,7 @@ __postfix_ldap_maps:
     result: login_attribute
     format: OK
   - name: protected_senders
-    enabled: "{{ postfix_ldap_enabled and postfix_smtp_enabled and not postfix_smtp_auth_required and postfix_sender_authorization }}"
+    enabled: "{{ postfix_ldap_enabled and (__postfix_listeners | selectattr('protect') | length > 0) }}"
     key: mail_attribute
     result: mail_attribute
     format: REJECT Sender address requires authenticated submission
@@ -79,3 +133,16 @@ __postfix_database_queries:
     JOIN alias_domain ad ON a.domain=ad.target_domain JOIN domain d ON d.domain=ad.target_domain
     WHERE ad.alias_domain='%d' AND a.address=CONCAT('%u','@',ad.target_domain)
     AND a.active=TRUE AND ad.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
+
+__postfix_desired_network:
+  - "{{ postfix_main_cf.get('inet_interfaces', postfix_interfaces | join(', ')) }}"
+  - "{{ postfix_main_cf.get('inet_protocols', postfix_protocols) }}"
+
+__postfix_outbound_parameters:
+  - default_transport
+  - relay_transport
+  - transport_maps
+  - relayhost
+  - relay_domains
+  - sender_dependent_default_transport_maps
+  - sender_dependent_relayhost_maps

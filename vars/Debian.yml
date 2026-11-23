@@ -9,3 +9,4 @@ __postfix_backend_packages:
   pgsql: [postfix-pgsql]
 __postfix_ca_file: /etc/ssl/certs/ca-certificates.crt
 __postfix_setgid_group: postdrop
+__postfix_pcre_packages: [postfix-pcre]

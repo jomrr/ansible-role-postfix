@@ -12,11 +12,6 @@
 - name: POSTFIX | Prepare mail service integration fixtures
   hosts: postfix_servers
   gather_facts: true
-  vars:
-    __postfix_fixture_packages:
-      Debian: [dovecot-core, dovecot-lmtpd, python3-cryptography]
-      RedHat: [dovecot, python3-cryptography]
-      Suse: [dovecot, python3-cryptography]
   tasks:
     - name: POSTFIX | Refresh APT package metadata
       become: true
@@ -40,12 +35,11 @@
         runrefresh: true
       when: ansible_facts.pkg_mgr == 'zypper'
 
-    - name: POSTFIX | Install authentication and certificate fixtures
+    - name: POSTFIX | Install the TLS fixture tool
       become: true
       become_user: root
       ansible.builtin.package:
-        name: "{{ __postfix_fixture_packages[ansible_facts.os_family] }}"
-        state: present
+        name: openssl
 
     - name: POSTFIX | Create the fixture mailbox group
       become: true
@@ -74,18 +68,16 @@
       loop_control:
         loop_var: __postfix_directory
 
-    - name: POSTFIX | Create fixture mailbox homes
+    - name: POSTFIX | Install shared delivery probes on the test server
       become: true
       become_user: root
-      ansible.builtin.file:
-        path: "/var/lib/postfix-test/{{ __postfix_user }}"
-        state: directory
-        owner: postfix_test
-        group: postfix_test
-        mode: '0700'
-      loop: [alice, bob, archive]
+      ansible.builtin.copy:
+        src: "../tests/{{ __postfix_probe }}"
+        dest: "/etc/postfix-test/{{ __postfix_probe }}"
+        mode: '0644'
+      loop: [smtp_client.py, smtp_checks.py, operating_modes.py]
       loop_control:
-        loop_var: __postfix_user
+        loop_var: __postfix_probe
 
     - name: POSTFIX | Trust the directory fixture CA for LDAP lookups
       become: true
@@ -95,91 +87,27 @@
         dest: /etc/postfix-test/ldap-ca.pem
         mode: '0644'
 
-    - name: POSTFIX | Create the test TLS private key
+    - name: POSTFIX | Create the disposable localhost certificate and key
       become: true
       become_user: root
-      community.crypto.openssl_privatekey:
-        path: /etc/postfix-test/server.key
-
-    - name: POSTFIX | Create the test certificate request
-      become: true
-      become_user: root
-      community.crypto.openssl_csr:
-        path: /etc/postfix-test/server.csr
-        privatekey_path: /etc/postfix-test/server.key
-        common_name: localhost
-        subject_alt_name: [DNS:localhost]
-
-    - name: POSTFIX | Create the test TLS certificate
-      become: true
-      become_user: root
-      community.crypto.x509_certificate:
-        path: /etc/postfix-test/server.crt
-        csr_path: /etc/postfix-test/server.csr
-        privatekey_path: /etc/postfix-test/server.key
-        provider: selfsigned
-
-    - name: POSTFIX | Configure Dovecot fixture accounts
-      become: true
-      become_user: root
-      ansible.builtin.copy:
-        dest: /etc/dovecot/postfix-users
-        owner: root
-        group: dovecot
-        mode: '0640'
-        content: |
-          alice@example.test:{PLAIN}alice-secret:5010:5010::/var/lib/postfix-test/alice::
-          bob@example.test:{PLAIN}bob-secret:5010:5010::/var/lib/postfix-test/bob::
-          archive@example.test:{PLAIN}archive-secret:5010:5010::/var/lib/postfix-test/archive::
-          directory@example.test:*:5010:5010::/var/lib/postfix-test/alice::
-          outsider@example.test:{PLAIN}outsider-secret:5010:5010::/var/lib/postfix-test/bob::
-          disabled@example.test:{PLAIN}disabled-secret:5010:5010::/var/lib/postfix-test/bob::
-
-    - name: POSTFIX | Read the fixture Dovecot version
       ansible.builtin.command:
-        argv: [dovecot, --version]
-      register: __postfix_dovecot_version
-      changed_when: false
+        argv: [openssl, req, -x509, -newkey, 'rsa:2048', -nodes, -days, '2', -subj, /CN=localhost,
+               -addext, 'subjectAltName=DNS:localhost', -keyout, /etc/postfix-test/server.key, -out, /etc/postfix-test/server.crt]
+        creates: /etc/postfix-test/server.crt
 
-    - name: POSTFIX | Configure the Dovecot authentication and delivery fixtures
-      become: true
-      become_user: root
-      ansible.builtin.template:
-        src: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}/molecule/resources/templates/dovecot.conf.j2"
-        dest: /etc/dovecot/dovecot.conf
-        owner: root
-        group: root
-        mode: '0644'
-        validate: doveconf -c %s -n
-
-    - name: POSTFIX | Start the Dovecot fixture
-      become: true
-      become_user: root
-      ansible.builtin.service:
-        name: dovecot
-        state: restarted
-
-- name: POSTFIX | Prepare PostfixAdmin database fixtures
-  hosts: localhost
+- name: POSTFIX | Prepare PostfixAdmin in the official database containers
+  hosts: postfix_mysql:postfix_pgsql
   gather_facts: false
   vars:
-    __postfix_schema: "{{ lookup('ansible.builtin.file', '../tests/postfixadmin.sql') }}"
+    __postfix_db_command: "{{ 'mariadb -uroot -pmolecule-database-secret postfixadmin -e' if 'postfix_mysql' in group_names
+                              else 'psql -U postgres -d postfixadmin -v ON_ERROR_STOP=1 -c' }}"
   tasks:
-    - name: POSTFIX | Initialize the MariaDB fixture
-      containers.podman.podman_container_exec:
-        name: "postfix-{{ lookup('ansible.builtin.env', 'MOLECULE_SCENARIO_NAME') }}-mysql"
-        argv: [mariadb, -uroot, -pmolecule-database-secret, postfixadmin, -e, "{{ __postfix_schema }}"]
-      register: __postfix_mysql_init
-      until: __postfix_mysql_init.rc == 0
+    - name: POSTFIX | Load the test schema through the database image's native client
+      ansible.builtin.raw: >-
+        {{ __postfix_db_command }} {{ lookup('ansible.builtin.file', '../tests/postfixadmin.sql') | quote }}
+      register: __postfix_db_init
+      until: __postfix_db_init.rc == 0
       retries: 20
       delay: 3
+      changed_when: true
       no_log: true
-
-    - name: POSTFIX | Initialize the PostgreSQL fixture
-      containers.podman.podman_container_exec:
-        name: "postfix-{{ lookup('ansible.builtin.env', 'MOLECULE_SCENARIO_NAME') }}-pgsql"
-        argv: [psql, -U, postgres, -d, postfixadmin, -v, ON_ERROR_STOP=1, -c, "{{ __postfix_schema }}"]
-      register: __postfix_pgsql_init
-      until: __postfix_pgsql_init.rc == 0
-      retries: 20
-      delay: 3

@@ -1,0 +1,90 @@
+---
+# role: postfix
+# file: tasks/tables.yml
+
+- name: POSTFIX | Create protected lookup directory
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: /etc/postfix/managed
+    owner: root
+    group: postfix
+    mode: '0755'
+    state: directory
+
+- name: POSTFIX | Render address and routing tables
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: table.j2
+    dest: "{{ __postfix_tables[__postfix_map].path }}"
+    owner: root
+    group: "{{ __postfix_tables[__postfix_map].group }}"
+    mode: "{{ __postfix_tables[__postfix_map].mode }}"
+    backup: "{{ postfix_backup and __postfix_map not in postfix_tables }}"
+  diff: "{{ __postfix_map not in postfix_tables and ansible_diff_mode }}"
+  loop: "{{ __postfix_tables | dict2items | rejectattr('value.secret') | map(attribute='key') }}"
+  loop_control:
+    loop_var: __postfix_map
+  register: __postfix_public_tables
+
+- name: POSTFIX | Render protected lookup tables without backups
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: table.j2
+    dest: "{{ __postfix_tables[__postfix_map].path }}"
+    owner: root
+    group: root
+    mode: '0600'
+    backup: false
+  loop: "{{ __postfix_tables | dict2items | selectattr('value.secret') | map(attribute='key') }}"
+  loop_control:
+    loop_var: __postfix_map
+  register: __postfix_secret_tables
+  no_log: true
+  diff: false
+
+- name: POSTFIX | Read timestamps of managed sources and indexes
+  become: true
+  become_user: root
+  ansible.builtin.find:
+    paths: "{{ __postfix_dir }}"
+  register: __postfix_table_files
+
+- name: POSTFIX | Protect existing indexes before writing credentials
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ __postfix_path }}"
+    owner: root
+    group: root
+    mode: '0600'
+    state: file
+  loop: "{{ __postfix_tables | postfix_exposed_indexes(__postfix_table_files.files) }}"
+  loop_control:
+    loop_var: __postfix_path
+
+- name: POSTFIX | Build missing, changed or stale native indexes
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: ["{{ __postfix_index.command }}", "{{ __postfix_index.map }}"]
+  loop: >-
+    {{ __postfix_tables | postfix_stale_indexes(__postfix_table_files.files,
+       (__postfix_public_tables.results + __postfix_secret_tables.results) | selectattr('changed') | map(attribute='__postfix_map') | list) }}
+  loop_control:
+    loop_var: __postfix_index
+    label: "{{ __postfix_index.map }}"
+  changed_when: true
+
+- name: POSTFIX | Remove retired custom tables, indexes and LDAP credentials
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ __postfix_path }}"
+    state: absent
+  loop: "{{ __postfix_tables | postfix_obsolete_maps(__postfix_table_files.files, __postfix_ldap_names) }}"
+  loop_control:
+    loop_var: __postfix_path
+  diff: false

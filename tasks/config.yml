@@ -1,0 +1,52 @@
+---
+# role: postfix
+# file: tasks/config.yml
+
+- name: POSTFIX | Render mail service configuration
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: "{{ __postfix_config }}.j2"
+    dest: "/etc/postfix/{{ __postfix_config }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: "{{ postfix_backup }}"
+  loop: [main.cf, master.cf]
+  loop_control:
+    loop_var: __postfix_config
+    label: "{{ __postfix_config }}"
+  notify: reload postfix
+
+- name: POSTFIX | Protect the mail log without changing its contents
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ postfix_log_file }}"
+    owner: root
+    group: root
+    mode: '0600'
+    state: touch
+    access_time: preserve
+    modification_time: preserve
+  when: postfix_log_file | length > 0
+
+- name: POSTFIX | Configure mail log rotation
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: logrotate.j2
+    dest: /etc/logrotate.d/ansible-postfix
+    owner: root
+    group: root
+    mode: '0644'
+    backup: "{{ postfix_backup }}"
+  when: postfix_log_file | length > 0
+
+- name: POSTFIX | Remove direct log rotation when logging to syslog
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: /etc/logrotate.d/ansible-postfix
+    state: absent
+  when: postfix_log_file | length == 0

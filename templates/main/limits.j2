@@ -1,0 +1,11 @@
+message_size_limit = {{ postfix_message_size_limit }}
+mailbox_size_limit = 0
+maximal_queue_lifetime = {{ postfix_maximal_queue_lifetime }}
+bounce_queue_lifetime = {{ postfix_bounce_queue_lifetime }}
+minimal_backoff_time = {{ postfix_minimal_backoff_time }}
+maximal_backoff_time = {{ postfix_maximal_backoff_time }}
+queue_run_delay = {{ postfix_queue_run_delay }}
+maillog_file = {{ postfix_log_file }}
+milter_protocol = {{ postfix_milter_protocol }}
+milter_default_action = {{ postfix_milter_default_action }}
+non_smtpd_milters = {{ postfix_non_smtpd_milters | join(', ') }}

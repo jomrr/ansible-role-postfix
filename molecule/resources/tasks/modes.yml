@@ -1,0 +1,93 @@
+---
+# role: postfix
+# file: molecule/resources/tasks/modes.yml
+
+- name: POSTFIX | Configure a public MX, source relay and internal delivery listener
+  ansible.builtin.include_role:
+    name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+  vars:
+    postfix_outbound: relayhost
+    postfix_relayhost: {host: 127.0.0.1, port: 1590, tls: may}
+    postfix_ldap_enabled: true
+    postfix_interfaces: [all]
+    postfix_trusted_networks: [127.0.0.1/32]
+    postfix_relay_domains: ["{{ groups['postfix_directory'][0] }}"]
+    postfix_relay_recipients: ["known@{{ groups['postfix_directory'][0] }}"]
+    postfix_relay_transport: 'relay:[127.0.0.1]:1590'
+    postfix_tables:
+      clients: {type: native, entries: {blocked@outside.test: REJECT}}
+    postfix_listeners:
+      smtp: {port: 25, auth: none, tls: may, relay: none, mx: true, postscreen: true, greet_wait: 1s}
+      submission: {port: 1588}
+      fetchmail: {port: 2525, address: 127.0.0.1, auth: none, tls: none, relay: none, clients: [127.0.0.1/32], sender_login_match: false}
+      applications:
+        port: 2526
+        address: 127.0.0.1
+        auth: none
+        tls: none
+        relay: clients
+        clients: [127.0.0.1/32]
+        sender_login_match: false
+        sender_restrictions: [check_sender_access $managed_table_clients]
+
+- name: POSTFIX | Exercise public reception and LDAP mailbox delivery
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    cmd: python3 /etc/postfix-test/smtp_checks.py --trusted-reception
+  changed_when: false
+
+- name: POSTFIX | Exercise source-restricted relay, gateway and custom table
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [python3, /etc/postfix-test/operating_modes.py, gateway, --domain, "{{ groups['postfix_directory'][0] }}"]
+  changed_when: false
+
+- name: POSTFIX | Exercise Sieve local sendmail return path
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    cmd: python3 /etc/postfix-test/operating_modes.py vacation --user alice
+  changed_when: false
+
+- name: POSTFIX | Point the real Dovecot test service at the internal SMTP listener
+  become: true
+  become_user: root
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/dovecot.conf
+    regexp: '^submission_host\s*='
+    line: submission_host = 127.0.0.1:2526
+    insertafter: EOF
+    validate: doveconf -c %s -n
+
+- name: POSTFIX | Reload the Dovecot test service with SMTP submission
+  become: true
+  become_user: root
+  ansible.builtin.service:
+    name: dovecot
+    state: reloaded
+
+- name: POSTFIX | Exercise Sieve SMTP return path from the trusted service
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    cmd: python3 /etc/postfix-test/operating_modes.py vacation --user archive
+  changed_when: false
+
+- name: POSTFIX | Configure a local-only authenticated mail hub
+  ansible.builtin.include_role:
+    name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+  vars:
+    postfix_outbound: none
+    postfix_providers: []
+    postfix_sender_relays: {}
+    postfix_listeners:
+      submission: {port: 1588}
+
+- name: POSTFIX | Verify restricted authenticated submission and listener isolation
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    cmd: python3 /etc/postfix-test/operating_modes.py hub
+  changed_when: false

@@ -1,5 +1,0 @@
-# Managed by ansible.
-# file: {{ template_destpath }}
-{% for address, transport in postfix_transport_maps | dictsort %}
-{{ address }} {{ transport }}
-{% endfor %}

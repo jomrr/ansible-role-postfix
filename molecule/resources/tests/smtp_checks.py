@@ -7,9 +7,7 @@ import argparse
 import base64
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from email.message import EmailMessage
 from functools import partial
-import json
 from pathlib import Path
 import smtplib
 import socket
@@ -17,9 +15,10 @@ import socketserver
 import ssl
 import subprocess
 import threading
-import time
-from typing import BinaryIO, Callable, cast
+from typing import BinaryIO, cast
 import uuid
+
+from smtp_client import in_mailbox, message, submission, tls_connection, wait_for
 
 
 @dataclass
@@ -147,67 +146,9 @@ class RelayHandler(socketserver.BaseRequestHandler):
         self.reply(b"250 Stored")
 
 
-def wait_for(predicate: Callable[[], bool], description: str) -> None:
-    """Wait for asynchronous delivery without forcing a queue flush."""
-    deadline = time.monotonic() + 40
-    while time.monotonic() < deadline:
-        if predicate():
-            return
-        time.sleep(0.2)
-    raise AssertionError(description)
-
-
-def in_mailbox(user: str, token: str) -> bool:
-    """Find a unique message in the real Dovecot maildir."""
-    return any(
-        token.encode() in path.read_bytes()
-        for directory in ("new", "cur")
-        for path in Path(f"/var/lib/postfix-test/{user}/Maildir/{directory}").glob("*")
-    )
-
-
 def in_provider(provider: Provider, token: str) -> bool:
     """Find a message captured by a specific authenticated provider."""
     return any(token.encode() in mail for mail in provider.messages)
-
-
-def message(sender: str, recipient: str, token: str) -> EmailMessage:
-    """Build a uniquely identifiable fixture message."""
-    mail = EmailMessage()
-    mail["From"] = sender
-    mail["To"] = recipient
-    mail["Subject"] = token
-    mail.set_content(token)
-    return mail
-
-
-def tls_connection(
-    context: ssl.SSLContext, port: int, source_address: tuple[str, int] | None = None
-) -> smtplib.SMTP:
-    """Establish a verified TLS connection on a configured SMTP listener."""
-    client: smtplib.SMTP
-    if port == 1466:
-        client = smtplib.SMTP_SSL(
-            "localhost",
-            port,
-            timeout=10,
-            context=context,
-            source_address=source_address,
-        )
-    else:
-        client = smtplib.SMTP(
-            "localhost", port, timeout=10, source_address=source_address
-        )
-        client.starttls(context=context)
-    client.ehlo()
-    return client
-
-
-def submission(context: ssl.SSLContext, user: str, port: int = 1588) -> smtplib.SMTP:
-    """Authenticate against the real Dovecot socket through Postfix."""
-    client = tls_connection(context, port)
-    client.login(f"{user}@example.test", f"{user}-secret")
-    return client
 
 
 def fetch_connection(
@@ -253,7 +194,9 @@ def verify_authentication(context: ssl.SSLContext) -> None:
 
 def verify_trusted_reception(context: ssl.SSLContext) -> None:
     """Explicit authentication exceptions must still prevent relaying and spoofing."""
-    with smtplib.SMTP("localhost", 25, timeout=10) as client:
+    with smtplib.SMTP(
+        "localhost", 25, local_hostname="mx.outside.test", timeout=10
+    ) as client:
         client.ehlo()
         assert client.mail("sender@outside.test")[0] == 250
         assert client.rcpt("sink@outside.test")[0] >= 500, (
@@ -269,10 +212,10 @@ def verify_trusted_reception(context: ssl.SSLContext) -> None:
         client.send_message(
             message("sender@outside.test", "directory@example.test", token)
         )
-    wait_for(lambda: in_mailbox("alice", token), "LDAP mailbox delivery failed")
-    verify_envelopes(
-        context, [(1588, "bob", "bob@example.test", "sink@outside.test", 2)]
-    )
+    wait_for(lambda: in_mailbox("directory", token), "LDAP mailbox delivery failed")
+    with submission(context, "bob") as client:
+        client.mail("bob@example.test")
+        assert client.rcpt("sink@outside.test")[0] == 250
     verify_fetch_policy(context, trusted_reception=True)
     with fetch_connection(context, trusted_reception=True) as client:
         client.send_message(
@@ -331,7 +274,6 @@ def verify_local_sender() -> None:
 
 def verify_accounts(context: ssl.SSLContext) -> None:
     """Exercise SQL-backed sender ownership, shared aliases and alias-domain delivery."""
-    verify_sender_ownership(context, (1588,))
     token = uuid.uuid4().hex
     for user in ("alice", "bob"):
         with submission(context, user) as client:
@@ -433,36 +375,20 @@ def verify_delivery(context: ssl.SSLContext, providers: list[Provider]) -> None:
     )
 
 
-def verify_envelopes(
-    context: ssl.SSLContext, cases: list[tuple[int, str, str, str, int]]
-) -> None:
-    """Compare the RCPT response after an independently successful SASL login."""
-    for port, login, sender, recipient, expected in cases:
-        with submission(context, login, port) as client:
-            assert client.mail(sender)[0] == 250
-            code, detail = client.rcpt(recipient)
-            assert code // 100 == expected, (login, sender, recipient, code, detail)
-
-
 def main() -> None:
     """Run isolated provider fixtures while exercising the configured mail service."""
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--trusted-reception", action="store_true")
     modes.add_argument("--accounts", action="store_true")
-    modes.add_argument("--envelopes", type=json.loads)
+    modes.add_argument("--null-client", action="store_true")
     args = parser.parse_args()
     client_tls = ssl.create_default_context(cafile="/etc/postfix-test/server.crt")
-    if args.envelopes:
-        verify_envelopes(client_tls, args.envelopes)
-        return
     if args.accounts:
         verify_accounts(client_tls)
-        print("SQL sender ownership, aliases and LMTP delivery passed")
         return
     if args.trusted_reception:
         verify_trusted_reception(client_tls)
-        print("Public SMTP reception, source and anti-relay checks passed")
         return
     server_tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     server_tls.minimum_version = ssl.TLSVersion.TLSv1_2
@@ -474,12 +400,28 @@ def main() -> None:
         Provider("provider-b", "relay-b-secret", True, server_tls),
     ]
     with ExitStack() as stack:
-        for port, provider in zip((1587, 1465), providers):
+        for port, provider in zip(
+            (1587, 1465), providers[:1] if args.null_client else providers
+        ):
             server = stack.enter_context(RelayServer(port, provider))
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             stack.callback(thread.join, 5)
             stack.callback(server.shutdown)
+        if args.null_client:
+            marker = uuid.uuid4().hex
+            subprocess.run(
+                ["sendmail", "-f", "local@node.example.test", "sink@outside.test"],
+                input=message(
+                    "local@node.example.test", "sink@outside.test", marker
+                ).as_bytes(),
+                check=True,
+            )
+            wait_for(
+                lambda: in_provider(providers[0], marker),
+                "Authenticated null-client relay failed",
+            )
+            return
         verify_authentication(client_tls)
         verify_sender_ownership(client_tls, (25, 1588, 1466))
         verify_fetch_policy(client_tls, trusted_reception=False)

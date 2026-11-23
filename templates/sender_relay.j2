@@ -1,7 +1,0 @@
-# Managed by ansible.
-# file: {{ template_destpath }}
-{% for address, name in postfix_sender_relays | dictsort %}
-{% for provider in postfix_providers if provider.name == name %}
-{{ address }} [{{ provider.host }}]:{{ provider.port | default(postfix_provider_port) }}
-{% endfor %}
-{% endfor %}

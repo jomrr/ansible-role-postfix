@@ -1,0 +1,53 @@
+---
+# role: postfix
+# file: molecule/resources/tasks/recovery.yml
+
+- name: POSTFIX | Verify default listener and local outbound bounce
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    cmd: python3 /etc/postfix-test/operating_modes.py bounce
+  changed_when: false
+
+- name: POSTFIX | Read native indexed map format for the recovery fixture
+  ansible.builtin.command:
+    argv: [postconf, -h, default_database_type]
+  changed_when: false
+  register: __postfix_recovery_type
+
+- name: POSTFIX | Record master identity before changing only indexed data
+  ansible.builtin.command:
+    argv: [cat, /var/spool/postfix/pid/master.pid]
+  changed_when: false
+  register: __postfix_original_master
+
+- name: POSTFIX | Remove an unchanged credential index as after an interrupted run
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "/etc/postfix/managed/sasl_passwd.{{ {'hash': 'db', 'btree': 'db', 'lmdb': 'lmdb', 'cdb': 'cdb'}[__postfix_recovery_type.stdout] }}"
+    state: absent
+
+- name: POSTFIX | Age a mailbox index without changing its source
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "/etc/postfix/managed/mailboxes.{{ {'hash': 'db', 'btree': 'db', 'lmdb': 'lmdb', 'cdb': 'cdb'}[__postfix_recovery_type.stdout] }}"
+    state: touch
+    mode: '0640'
+    modification_time: '200001010000.00'
+    access_time: preserve
+
+- name: POSTFIX | Converge changed aliases and interrupted map indexes
+  ansible.builtin.include_role:
+    name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+  vars:
+    postfix_local_aliases: {postmaster: root, monitoring: root}
+
+- name: POSTFIX | Verify the alias and recovered native indexes
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    cmd: >-
+      python3 /etc/postfix-test/operating_modes.py recovery --pid {{ __postfix_original_master.stdout | trim }} --map-type {{ __postfix_recovery_type.stdout }}
+  changed_when: false

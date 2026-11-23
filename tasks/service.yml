@@ -1,0 +1,14 @@
+---
+# role: postfix
+# file: tasks/service.yml
+
+- name: POSTFIX | Apply pending configuration changes
+  ansible.builtin.meta: flush_handlers
+
+- name: POSTFIX | Enable and start the mail service
+  become: true
+  become_user: root
+  ansible.builtin.service:
+    name: postfix
+    enabled: true
+    state: started

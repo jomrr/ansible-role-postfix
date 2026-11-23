@@ -1,7 +1,7 @@
 [project]
 name = "postfix"
 version = "0.0.0"
-description = "Install Postfix with authenticated TLS submission, sender authorization, provider relays and file, SQL or LDAP account lookups."
+description = "Configure Postfix listeners, delivery routes, sender authorization and file, SQL or LDAP lookup tables."
 requires-python = ">=3.13"
 authors = [
   { name = "Jonas Mauer" },

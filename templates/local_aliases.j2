@@ -1,5 +1,0 @@
-# Managed by ansible.
-# file: {{ template_destpath }}
-{% for login, destination in postfix_local_aliases | dictsort %}
-{{ login }}: {{ destination }}
-{% endfor %}

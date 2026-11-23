@@ -9,3 +9,4 @@ __postfix_backend_packages:
   pgsql: [postfix-postgresql]
 __postfix_ca_file: /etc/ssl/ca-bundle.pem
 __postfix_setgid_group: maildrop
+__postfix_pcre_packages: [postfix-pcre]

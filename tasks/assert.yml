@@ -2,36 +2,92 @@
 # role: postfix
 # file: tasks/assert.yml
 
-- name: POSTFIX | Validate listener and TLS relationships
+- name: POSTFIX | Validate network, TLS, address classes and delivery policy
   ansible.builtin.assert:
     that:
-      - postfix_submission_port > 0 and postfix_submission_port < 65536
-      - postfix_submissions_port > 0 and postfix_submissions_port < 65536
-      - postfix_fetchmail_port > 0 and postfix_fetchmail_port < 65536
-      - postfix_provider_port > 0 and postfix_provider_port < 65536
-      - ([25, postfix_submission_port, postfix_submissions_port, postfix_fetchmail_port] | unique | length) == 4
+      - (__postfix_listeners | length) == (postfix_listeners | length)
+      - postfix_smtp_tls_protocols is not search('[\r\n\x00]') and postfix_smtpd_tls_protocols is not search('[\r\n\x00]')
       - (postfix_tls_certificate | length > 0) == (postfix_tls_private_key | length > 0)
-      - not (postfix_submission_enabled or postfix_submissions_enabled) or postfix_tls_certificate | length > 0
-      - not (postfix_smtp_enabled and postfix_smtp_auth_required) or postfix_tls_certificate | length > 0
-      - not (postfix_fetchmail_enabled and postfix_fetchmail_auth_required) or postfix_tls_certificate | length > 0
+      - not (__postfix_listeners | rejectattr('tls','equalto','none') | list) or postfix_tls_certificate | length > 0
+      - postfix_provider_port > 0 and postfix_provider_port < 65536
       - postfix_interfaces | length > 0
-      - not postfix_fetchmail_enabled or postfix_fetchmail_networks | length > 0
       - postfix_message_size_limit > 0
-      - postfix_virtual_domains | intersect(postfix_local_domains) | length == 0
+      - postfix_compatibility_level is match('^[0-9]+(\.[0-9]+)*\Z')
+      - postfix_smtp_bind_address is not search('[\s\x00]') and postfix_smtp_bind_address6 is not search('[\s\x00]')
+      - postfix_recipient_delimiter is not search('[\s\x00]')
+      - postfix_logrotate_count > 0
+      - postfix_client_auth_rate_limit >= 0 and postfix_client_connection_rate_limit >= 0 and postfix_client_connection_count_limit >= 0
+      - (postfix_local_domains + postfix_virtual_mailbox_domains + postfix_virtual_alias_domains + postfix_relay_domains) | unique | length ==
+        (postfix_local_domains + postfix_virtual_mailbox_domains + postfix_virtual_alias_domains + postfix_relay_domains) | length
       - postfix_dovecot_lmtp_transport is match('^lmtp:(unix:|inet:|\[)')
+      - postfix_outbound != 'none' or not (postfix_providers or postfix_transport_maps or postfix_relay_domains)
+      - postfix_outbound == 'relayhost' or not postfix_relayhost
+      - postfix_outbound != 'relayhost' or not postfix_default_provider
+      - not postfix_ldap_enabled or __postfix_ldap_domains | length > 0
+      - postfix_main_cf | postfix_clean_options is mapping
+      - postfix_outbound != 'none' or not (postfix_tables.values() | selectattr('parameter', 'defined')
+        | map(attribute='parameter') | intersect(__postfix_outbound_parameters))
+      - postfix_outbound != 'none' or not (postfix_main_cf.keys() | intersect(__postfix_outbound_parameters))
     quiet: true
+
+- name: POSTFIX | Validate relay destination and protected credentials
+  ansible.builtin.assert:
+    that:
+      - postfix_relayhost.host is match('^[a-zA-Z0-9][a-zA-Z0-9.:-]*\Z')
+      - postfix_relayhost.get('port', 25) > 0 and postfix_relayhost.get('port', 25) < 65536
+      - (postfix_relayhost.get('username', '') | length > 0) == (postfix_relayhost.get('password', '') | length > 0)
+      - postfix_relayhost.get('username', '') is not search('[\s:\x00]')
+      - postfix_relayhost.get('password', '') is not search('[\s\x00]')
+      - not postfix_relayhost.get('username') or postfix_relayhost.get('tls', 'secure') in ['secure','wrapper']
+    quiet: true
+  when: postfix_outbound == 'relayhost'
+  no_log: true
+
+- name: POSTFIX | Validate additional master services
+  ansible.builtin.assert:
+    that:
+      - __postfix_service.name is match('^[A-Za-z0-9_.:\[\]-]+\Z')
+      - __postfix_service.command | length > 0 and __postfix_service.command is not search('[\r\n\x00]')
+      - __postfix_service.get('private', '-') in ['y','n','-'] and __postfix_service.get('chroot','n') in ['y','n','-']
+      - __postfix_service.get('unprivileged','-') in ['y','n','-']
+      - __postfix_service.get('wakeup','-') is match('^(-|[0-9]+[?]?)\Z')
+      - __postfix_service.get('limit','-') is match('^(-|[0-9]+)\Z')
+      - __postfix_service.get('options', {}) | postfix_clean_options is mapping
+    quiet: true
+  loop: "{{ postfix_master_cf }}"
+  loop_control:
+    loop_var: __postfix_service
+    label: "{{ __postfix_service.name }}"
+
+- name: POSTFIX | Validate LDAP alias and distribution lookup contracts
+  ansible.builtin.assert:
+    that:
+      - __postfix_query.key is match('^[a-z][a-z0-9_]*\Z')
+      - __postfix_query.value is mapping
+      - __postfix_query.value.keys() | difference(['filter','result_attribute','special_result_attribute','leaf_result_attribute']) | length == 0
+      - __postfix_query.value['filter'] is match('^\([^\r\n\x00]+\)\Z') and '%s' in __postfix_query.value['filter']
+      - __postfix_query.value.get('result_attribute', '') | length > 0 or __postfix_query.value.get('leaf_result_attribute', '') | length > 0
+      - __postfix_query.value.get('result_attribute', '') == '' or __postfix_query.value.result_attribute is match('^[a-zA-Z][a-zA-Z0-9-]*\Z')
+      - __postfix_query.value.get('special_result_attribute','member') is match('^[a-zA-Z][a-zA-Z0-9-]*\Z')
+      - __postfix_query.value.get('leaf_result_attribute','mail') is match('^[a-zA-Z][a-zA-Z0-9-]*\Z')
+    quiet: true
+  loop: "{{ postfix_ldap_alias_queries | dict2items }}"
+  loop_control:
+    loop_var: __postfix_query
+    label: "{{ __postfix_query.key }}"
 
 - name: POSTFIX | Validate single-line configuration values
   ansible.builtin.assert:
     that:
       - __postfix_value | length > 0
-      - __postfix_value is not regex('[\r\n\s]')
+      - __postfix_value is not regex('[\s\x00]')
     quiet: true
   loop: >-
-    {{ [postfix_hostname, postfix_origin, postfix_dovecot_auth_socket, postfix_dovecot_lmtp_transport, postfix_fetchmail_address]
-       + postfix_interfaces + postfix_local_domains + postfix_virtual_domains + postfix_trusted_networks
-       + postfix_fetchmail_networks + postfix_smtpd_milters + postfix_non_smtpd_milters
-       + postfix_submission_milters + postfix_smtp_policy_services }}
+    {{ [postfix_hostname, postfix_origin, postfix_dovecot_auth_socket, postfix_dovecot_lmtp_transport,
+        postfix_cyrus_sasl_path, postfix_relay_transport, postfix_smtp_helo_name]
+       + postfix_interfaces + postfix_local_domains + postfix_virtual_mailbox_domains + postfix_virtual_alias_domains
+       + postfix_relay_domains + postfix_ldap_address_domains + postfix_trusted_networks
+       + postfix_non_smtpd_milters + postfix_tls_policy_maps + postfix_bare_newline_exclusions }}
   loop_control:
     loop_var: __postfix_value
     label: "{{ __postfix_value }}"
@@ -41,7 +97,7 @@
     that:
       - __postfix_path == '' or __postfix_path is match('^/[^\s]+$')
     quiet: true
-  loop: "{{ [postfix_log_file, postfix_tls_certificate, postfix_tls_private_key, postfix_tls_ca_file] }}"
+  loop: "{{ [postfix_log_file, postfix_tls_certificate, postfix_tls_private_key, postfix_tls_ca_file, postfix_lmtp_tls_ca_file] }}"
   loop_control:
     loop_var: __postfix_path
     label: "{{ __postfix_path }}"

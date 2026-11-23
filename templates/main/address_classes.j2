@@ -1,0 +1,19 @@
+mydestination = {{ postfix_local_domains | join(', ') }}
+virtual_alias_domains = {{ postfix_virtual_alias_domains | join(', ') }}
+virtual_mailbox_domains = {{ postfix_virtual_mailbox_domains | join(' ') }}{% if postfix_account_backend != 'files' %} proxy:{{ postfix_account_backend }}:{{ __postfix_dir }}/domains.cf{% endif %}
+
+relay_domains = {{ postfix_relay_domains | join(', ') }}
+relay_transport = {{ 'error:5.7.1 External delivery disabled' if postfix_outbound == 'none' else postfix_relay_transport }}
+virtual_transport = {{ postfix_dovecot_lmtp_transport }}
+{% if postfix_local_lmtp_enabled %}
+mailbox_transport = {{ postfix_dovecot_lmtp_transport }}
+{% endif %}
+authorized_submit_users = {{ postfix_local_submitters.keys() | join(', ') }}
+recipient_delimiter = {{ postfix_recipient_delimiter }}
+alias_database = $alias_maps
+{% for parameter, maps in __postfix_map_parameters.items() %}
+{{ parameter }} = {{ maps | join(', ') }}
+{% endfor %}
+{% for name in postfix_tables %}
+managed_table_{{ name }} = {{ __postfix_tables[name].map }}
+{% endfor %}

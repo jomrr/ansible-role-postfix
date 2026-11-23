@@ -3,6 +3,7 @@ objectClass: user
 sAMAccountName: alice
 userPrincipalName: alice@example.test
 mail: directory@example.test
+proxyAddresses: smtp:alternate@example.test
 userAccountControl: 544
 
 dn: CN=Outsider,CN=Users,DC=example,DC=test
@@ -24,3 +25,9 @@ objectClass: group
 sAMAccountName: MailUsers
 member: CN=Alice,CN=Users,DC=example,DC=test
 member: CN=Disabled,CN=Users,DC=example,DC=test
+
+dn: CN=Discussion,CN=Users,DC=example,DC=test
+objectClass: group
+sAMAccountName: Discussion
+mail: list@example.test
+member: CN=Alice,CN=Users,DC=example,DC=test

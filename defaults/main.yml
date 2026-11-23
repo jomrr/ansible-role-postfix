@@ -8,7 +8,7 @@ postfix_hostname: "{{ ansible_facts.fqdn }}"
 # Domain appended to locally submitted unqualified addresses.
 postfix_origin: $myhostname
 
-# Interfaces used by the standard SMTP and submission listeners.
+# Global listening interfaces for services without an explicit bind address.
 postfix_interfaces: [loopback-only]
 
 # IP protocol families enabled by Postfix.
@@ -18,33 +18,11 @@ postfix_protocols: all
 # Domains delivered to local Unix accounts through the local delivery agent.
 postfix_local_domains: ['$myhostname', localhost]
 
-# Networks permitted to connect when the standard SMTP listener is restricted.
+# Global trusted networks used by native Postfix parameters. Network relay requires explicit listener clients.
 postfix_trusted_networks: ['127.0.0.0/8', '[::1]/128']
 
-# Restrict standard SMTP reception to trusted networks; false permits public MX reception.
-postfix_smtp_trusted_only: true
-
-# Local aliases managed separately from distribution aliases.
-postfix_local_aliases:
-  postmaster: root
-
-# Enable the standard SMTP listener on port 25.
-postfix_smtp_enabled: true
-
-# Require TLS and Dovecot authentication on the standard SMTP listener.
-postfix_smtp_auth_required: true
-
-# Enable authenticated submission with mandatory STARTTLS.
-postfix_submission_enabled: false
-
-# Port for authenticated STARTTLS submission.
-postfix_submission_port: 587
-
-# Enable authenticated submission with implicit TLS.
-postfix_submissions_enabled: false
-
-# Port for authenticated implicit TLS submission.
-postfix_submissions_port: 465
+# Local aliases. Set root to a monitored address or local mailbox.
+postfix_local_aliases: {postmaster: root, mailer-daemon: postmaster, abuse: postmaster}
 
 # Dovecot authentication socket relative to the Postfix queue directory.
 postfix_dovecot_auth_socket: private/auth
@@ -57,9 +35,6 @@ postfix_tls_private_key: ''
 
 # Additional trusted CA bundle for outgoing TLS; empty uses the platform bundle.
 postfix_tls_ca_file: ''
-
-# Reject SMTP envelope senders that do not belong to the authenticated user.
-postfix_sender_authorization: true
 
 # Unix submitters and their permitted envelope senders; root is trusted.
 postfix_local_submitters:
@@ -90,20 +65,17 @@ postfix_sasl_access_enabled: false
 postfix_sasl_access_logins: []
 # postfix_sasl_access_logins: [relay@example.org]
 
-# Domains accepted for virtual mailboxes and delivered through LMTP.
-postfix_virtual_domains: []
-
-# Valid virtual recipient addresses for the text-file backend.
+# Virtual mailbox addresses from files, available alongside SQL and LDAP.
 postfix_mailboxes: []
 # postfix_mailboxes:
 #   - alice@example.org
 
-# Virtual aliases and their destination addresses for the text-file backend.
+# Local virtual aliases and their destinations, searched before SQL and LDAP.
 postfix_virtual_aliases: {}
 # postfix_virtual_aliases:
 #   sales@example.org: ['alice@example.org']
 
-# Envelope sender addresses and owners for the file backend or local overrides alongside LDAP.
+# Local envelope sender owners, searched before SQL and LDAP.
 postfix_sender_logins: {}
 # postfix_sender_logins:
 #   alice@example.org: [alice]
@@ -131,7 +103,7 @@ postfix_provider_port: 587
 # Choices: starttls, wrapper
 postfix_provider_tls: starttls
 
-# Default provider name; empty permits direct SMTP delivery for unmatched senders.
+# Optional default named provider for unmatched senders in direct mode.
 postfix_default_provider: ''
 
 # Exact envelope sender addresses mapped to provider names.
@@ -144,21 +116,6 @@ postfix_transport_maps: {}
 postfix_tls_policies: {}
 # postfix_tls_policies:
 #   "[mail.example.org]:25": "secure match=mail.example.org"
-
-# Enable a dedicated trusted SMTP listener for Fetchmail delivery.
-postfix_fetchmail_enabled: false
-
-# Require TLS and Dovecot authentication in addition to trusted Fetchmail sources.
-postfix_fetchmail_auth_required: true
-
-# Numeric interface address for the dedicated Fetchmail listener.
-postfix_fetchmail_address: 127.0.0.1
-
-# Port of the dedicated Fetchmail listener.
-postfix_fetchmail_port: 2525
-
-# Sources permitted on the Fetchmail listener; recipients must still be local.
-postfix_fetchmail_networks: ['127.0.0.1/32', '[::1]/128']
 
 # Envelope senders and their optional outgoing archive copy address.
 postfix_sender_bcc: {}
@@ -184,28 +141,127 @@ postfix_maximal_backoff_time: 4000s
 # Interval between deferred-queue scans.
 postfix_queue_run_delay: 300s
 
-# Direct Postfix log file; empty uses the system mail syslog facility.
-postfix_log_file: /var/log/postfix.log
+# Direct Postfix log path. Empty uses the system mail syslog facility and its journal integration.
+postfix_log_file: ''
 
 # TLS connection summary logging level.
 # Choices: 0, 1
 postfix_tls_loglevel: 1
 
-# Milter endpoints for incoming SMTP, including DKIM and DMARC filters.
-postfix_smtpd_milters: []
-
 # Milter endpoints for local sendmail submissions.
 postfix_non_smtpd_milters: []
-
-# Milter endpoints for authenticated submission, including signing and From checks.
-postfix_submission_milters: []
 
 # Action when an enabled Milter is unavailable.
 # Choices: tempfail, reject, accept
 postfix_milter_default_action: tempfail
 
-# Policy service endpoints for public SMTP recipient checks, such as SPF.
-postfix_smtp_policy_services: []
-
-# Preserve previous managed files; backups may contain provider credentials.
+# Preserve previous nonsecret configuration files when they change.
 postfix_backup: false
+
+# Named TCP listeners with independent binding, TLS, authentication, relay and recipient policies. See the operating examples.
+postfix_listeners: {}
+
+# Delivery path for nonlocal addresses. Closed mode rejects foreign recipients and bounces local submissions to them.
+# Choices: none, direct, relayhost
+postfix_outbound: none
+
+# Next hop for relayhost mode. Authentication requires certificate-verified TLS.
+postfix_relayhost: {}
+
+# Virtual mailbox domains from inventory, supplemented by active PostfixAdmin domains.
+postfix_virtual_mailbox_domains: []
+
+# Domains whose addresses must resolve through virtual alias maps.
+postfix_virtual_alias_domains: []
+
+# Domains forwarded to another mail server, restricted to the relay recipient table.
+postfix_relay_domains: []
+
+# Accepted recipient addresses in relay domains. An explicit @domain entry accepts any address in that domain.
+postfix_relay_recipients: []
+
+# Postfix transport and optional next hop used for relay domains.
+postfix_relay_transport: relay
+
+# TLS policy for direct SMTP delivery. DANE requires a trusted DNSSEC-validating resolver.
+# Choices: may, dane
+postfix_direct_tls: may
+
+# Additional native SMTP TLS policy tables searched after the managed destination policies.
+postfix_tls_policy_maps: []
+
+# Hostname announced by the outgoing SMTP client.
+postfix_smtp_helo_name: $myhostname
+
+# Optional IPv4 source address for outgoing SMTP.
+postfix_smtp_bind_address: ''
+
+# Optional IPv6 source address for outgoing SMTP.
+postfix_smtp_bind_address6: ''
+
+# SMTP server authentication implementation.
+# Choices: dovecot, cyrus
+postfix_sasl_type: dovecot
+
+# Cyrus SASL application name when the Cyrus server backend is selected.
+postfix_cyrus_sasl_path: smtpd
+
+# TLS security level for TCP LMTP delivery. Secure and verify require a trusted certificate.
+# Choices: none, may, encrypt, verify, secure
+postfix_lmtp_tls_security_level: secure
+
+# CA bundle for TCP LMTP delivery. Empty selects the platform trust store.
+postfix_lmtp_tls_ca_file: ''
+
+# Recipient address extension delimiters.
+postfix_recipient_delimiter: +
+
+# Postfix compatibility level used by the installed daemon.
+postfix_compatibility_level: '3.6'
+
+# SMTP handling of bare newlines. Active listeners require a Postfix build supporting the selected policy.
+# Choices: normalize, reject, no
+postfix_forbid_bare_newline: normalize
+
+# Client networks exempt from the SMTP bare-newline policy.
+postfix_bare_newline_exclusions: [$mynetworks]
+
+# Protocol bounds for both optional and mandatory TLS on outbound SMTP.
+postfix_smtp_tls_protocols: '>=TLSv1.2'
+
+# Protocol bounds for both optional and mandatory TLS on incoming SMTP.
+postfix_smtpd_tls_protocols: '>=TLSv1.2'
+
+# Per-client limit on authentication attempts. Zero disables this limit.
+postfix_client_auth_rate_limit: 0
+
+# Per-client limit on new connections. Zero disables this limit.
+postfix_client_connection_rate_limit: 0
+
+# Per-client limit on simultaneous connections. Zero disables this limit.
+postfix_client_connection_count_limit: 50
+
+# Protocol version used by configured Milters.
+postfix_milter_protocol: 6
+
+# Additional single-line main.cf parameters. Role-owned delivery invariants apply in closed mode.
+postfix_main_cf: {}
+
+# Additional native master.cf services. Give each service a unique name and type.
+postfix_master_cf: []
+
+# Additional managed lookup tables keyed by name, with entries, type, optional main.cf parameter and explicit secret flag.
+postfix_tables: {}
+
+# Additional domains eligible for LDAP address lookups, including domains obtained dynamically from SQL.
+postfix_ldap_address_domains: []
+
+# Optional LDAP alias or distribution-list maps with a keyed address filter, result attributes and optional recursive group attributes.
+postfix_ldap_alias_queries: {}
+
+# Rotation interval when direct file logging is enabled.
+# Choices: daily, weekly, monthly
+postfix_logrotate_interval: daily
+
+# Number of rotated Postfix log files to retain.
+postfix_logrotate_count: 14

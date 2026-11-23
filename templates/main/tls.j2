@@ -1,0 +1,25 @@
+smtp_tls_security_level = {{ postfix_direct_tls }}
+{% if postfix_direct_tls == 'dane' %}
+smtp_dns_support_level = dnssec
+{% endif %}
+smtp_helo_name = {{ postfix_smtp_helo_name }}
+smtp_bind_address = {{ postfix_smtp_bind_address }}
+smtp_bind_address6 = {{ postfix_smtp_bind_address6 }}
+smtp_tls_CAfile = {{ postfix_tls_ca_file or __postfix_ca_file }}
+{% if postfix_tls_ca_file or postfix_lmtp_tls_ca_file %}
+tls_append_default_CA = yes
+{% endif %}
+smtp_tls_protocols = {{ postfix_smtp_tls_protocols }}
+smtp_tls_mandatory_protocols = $smtp_tls_protocols
+smtpd_tls_protocols = {{ postfix_smtpd_tls_protocols }}
+smtpd_tls_mandatory_protocols = $smtpd_tls_protocols
+smtp_tls_loglevel = {{ postfix_tls_loglevel }}
+smtpd_tls_loglevel = {{ postfix_tls_loglevel }}
+{% if postfix_tls_certificate %}
+smtpd_tls_cert_file = {{ postfix_tls_certificate }}
+smtpd_tls_key_file = {{ postfix_tls_private_key }}
+{% endif %}
+lmtp_tls_security_level = {{ 'none' if postfix_dovecot_lmtp_transport.startswith('lmtp:unix:') else postfix_lmtp_tls_security_level }}
+lmtp_tls_CAfile = {{ postfix_lmtp_tls_ca_file or __postfix_ca_file }}
+lmtp_tls_protocols = $smtp_tls_protocols
+lmtp_tls_mandatory_protocols = $smtp_tls_protocols

@@ -1,0 +1,27 @@
+---
+# role: postfix
+# file: molecule/resources/vars/directory.yml
+
+__postfix_directory_filter: >-
+  (&(objectClass=user)(memberOf=CN=MailUsers,CN=Users,DC=example,DC=test)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))
+__postfix_directory_connection: &directory_connection
+  uris: ["ldaps://{{ groups['postfix_directory'][0] }}"]
+  bind_dn: CN=postfix-reader,CN=Users,DC=example,DC=test
+  bind_password: 'Molecule-Bind-123!'
+  base: DC=example,DC=test
+  ca_file: /etc/postfix-test/ldap-ca.pem
+
+postfix_ldap:
+  <<: *directory_connection
+  eligibility_filter: "{{ __postfix_directory_filter }}"
+  mail_attribute: mail
+  login_attribute: userPrincipalName
+
+dovecot_ldap_enabled: true
+dovecot_ldap:
+  <<: *directory_connection
+  user_filter: "(&{{ __postfix_directory_filter }}(mail=%{user}))"
+  user_fields:
+    user: '%{ldap:mail}'
+  iterate_filter: "{{ __postfix_directory_filter }}"
+  iterate_user: '%{ldap:mail}'
