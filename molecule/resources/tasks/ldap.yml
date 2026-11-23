@@ -1,0 +1,62 @@
+---
+# role: postfix
+# file: molecule/resources/tasks/ldap.yml
+
+- name: POSTFIX | Check AD group, disabled users, login ownership and file relay exceptions
+  become: true
+  become_user: root
+  ansible.builtin.script:
+    cmd: "../tests/smtp_checks.py --envelopes {{ __postfix_envelopes | to_json | quote }}"
+    executable: python3
+  vars:
+    __postfix_envelopes:
+      - [25, outsider, '', bob@example.test, 5]
+      - [1588, outsider, outsider-owned@example.test, sink@outside.test, 5]
+      - [1466, outsider, '', bob@example.test, 5]
+      - [2525, outsider, '', bob@example.test, 5]
+      - [1588, disabled, '', bob@example.test, 5]
+      - [1588, alice, directory@example.test, directory@example.test, 2]
+      - [25, alice, directory@example.test, sink@outside.test, 2]
+      - [2525, alice, '', sink@outside.test, 5]
+      - [1466, bob, root@app.example.test, sink@outside.test, 2]
+      - [1588, alice, root@app.example.test, bob@example.test, 5]
+      - [1588, bob, directory@example.test, bob@example.test, 5]
+      - [1588, alice, directory@example.test, outsider@example.test, 5]
+      - [1588, alice, directory@example.test, retired@example.test, 5]
+  changed_when: false
+
+- name: POSTFIX | Replace directory trust with an unrelated certificate
+  become: true
+  become_user: root
+  ansible.builtin.copy:
+    src: /etc/postfix-test/server.crt
+    remote_src: true
+    dest: /etc/postfix-test/ldap-ca.pem
+    mode: '0644'
+    backup: true
+  register: __postfix_replaced_ca
+
+- name: POSTFIX | Reconnect directory clients using the unrelated CA
+  become: true
+  become_user: root
+  ansible.builtin.service:
+    name: postfix
+    state: restarted
+
+- name: POSTFIX | Defer submission by an eligible login with untrusted directory TLS
+  become: true
+  become_user: root
+  ansible.builtin.script:
+    cmd: >-
+      ../tests/smtp_checks.py --envelopes '[[1588, "alice", "", "bob@example.test", 4]]'
+    executable: python3
+  changed_when: false
+
+- name: POSTFIX | Restore directory trust for public SMTP reception
+  become: true
+  become_user: root
+  ansible.builtin.copy:
+    src: "{{ __postfix_replaced_ca.backup_file }}"
+    remote_src: true
+    dest: /etc/postfix-test/ldap-ca.pem
+    mode: '0644'

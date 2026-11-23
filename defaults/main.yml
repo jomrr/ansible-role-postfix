@@ -65,9 +65,30 @@ postfix_sender_authorization: true
 postfix_local_submitters:
   root: ['*']
 
-# Account lookup backend for recipients, aliases and sender ownership.
+# Primary lookup backend for recipients, aliases and sender ownership.
 # Choices: files, mysql, pgsql
 postfix_account_backend: files
+
+# Add TLS-verified LDAP mailbox and sender lookups to the primary backend.
+postfix_ldap_enabled: false
+
+# Directory connection, eligibility filter and attributes for mail addresses and SASL login names.
+postfix_ldap:
+  uris: []
+  base: ''
+  bind_dn: ''
+  bind_password: ''
+  ca_file: ''
+  eligibility_filter: ''
+  mail_attribute: mail
+  login_attribute: userPrincipalName
+
+# Require an explicit OK for the SASL login on every listener requiring SMTP AUTH.
+postfix_sasl_access_enabled: false
+
+# Additional SASL logins explicitly entitled to submit when the access check is enabled.
+postfix_sasl_access_logins: []
+# postfix_sasl_access_logins: [relay@example.org]
 
 # Domains accepted for virtual mailboxes and delivered through LMTP.
 postfix_virtual_domains: []
@@ -82,7 +103,7 @@ postfix_virtual_aliases: {}
 # postfix_virtual_aliases:
 #   sales@example.org: ['alice@example.org']
 
-# Envelope sender addresses and authorized SASL identities for the text-file backend.
+# Envelope sender addresses and owners for the file backend or local overrides alongside LDAP.
 postfix_sender_logins: {}
 # postfix_sender_logins:
 #   alice@example.org: [alice]

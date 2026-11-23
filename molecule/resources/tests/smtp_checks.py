@@ -9,6 +9,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass, field
 from email.message import EmailMessage
 from functools import partial
+import json
 from pathlib import Path
 import smtplib
 import socket
@@ -258,16 +259,20 @@ def verify_trusted_reception(context: ssl.SSLContext) -> None:
         assert client.rcpt("sink@outside.test")[0] >= 500, (
             "Unauthenticated relay accepted"
         )
-        client.rset()
-        assert client.mail("alice@example.test")[0] == 250
-        code, response = client.rcpt("bob@example.test")
-        assert code >= 500 and b"requires authenticated submission" in response, (
-            "Unauthenticated local sender impersonation accepted"
-        )
+        for sender in ("alice@example.test", "directory@example.test"):
+            client.rset()
+            assert client.mail(sender)[0] == 250
+            code, response = client.rcpt("bob@example.test")
+            assert code >= 500 and b"requires authenticated submission" in response
         client.rset()
         token = uuid.uuid4().hex
-        client.send_message(message("sender@outside.test", "bob@example.test", token))
-    wait_for(lambda: in_mailbox("bob", token), "Unauthenticated SMTP reception failed")
+        client.send_message(
+            message("sender@outside.test", "directory@example.test", token)
+        )
+    wait_for(lambda: in_mailbox("alice", token), "LDAP mailbox delivery failed")
+    verify_envelopes(
+        context, [(1588, "bob", "bob@example.test", "sink@outside.test", 2)]
+    )
     verify_fetch_policy(context, trusted_reception=True)
     with fetch_connection(context, trusted_reception=True) as client:
         client.send_message(
@@ -428,25 +433,36 @@ def verify_delivery(context: ssl.SSLContext, providers: list[Provider]) -> None:
     )
 
 
+def verify_envelopes(
+    context: ssl.SSLContext, cases: list[tuple[int, str, str, str, int]]
+) -> None:
+    """Compare the RCPT response after an independently successful SASL login."""
+    for port, login, sender, recipient, expected in cases:
+        with submission(context, login, port) as client:
+            assert client.mail(sender)[0] == 250
+            code, detail = client.rcpt(recipient)
+            assert code // 100 == expected, (login, sender, recipient, code, detail)
+
+
 def main() -> None:
     """Run isolated provider fixtures while exercising the configured mail service."""
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--trusted-reception", action="store_true")
     modes.add_argument("--accounts", action="store_true")
+    modes.add_argument("--envelopes", type=json.loads)
     args = parser.parse_args()
     client_tls = ssl.create_default_context(cafile="/etc/postfix-test/server.crt")
+    if args.envelopes:
+        verify_envelopes(client_tls, args.envelopes)
+        return
     if args.accounts:
         verify_accounts(client_tls)
-        print(
-            "SQL sender ownership, shared identities, aliases and LMTP delivery passed"
-        )
+        print("SQL sender ownership, aliases and LMTP delivery passed")
         return
     if args.trusted_reception:
         verify_trusted_reception(client_tls)
-        print(
-            "Explicit unauthenticated reception, source restrictions and anti-relay checks passed"
-        )
+        print("Public SMTP reception, source and anti-relay checks passed")
         return
     server_tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     server_tls.minimum_version = ssl.TLSVersion.TLSv1_2

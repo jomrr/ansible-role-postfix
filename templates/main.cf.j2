@@ -16,13 +16,20 @@ alias_database = $alias_maps
 authorized_submit_users = {{ postfix_local_submitters.keys() | join(', ') }}
 local_login_sender_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/local_senders
 
-smtpd_relay_restrictions = {{ 'permit_sasl_authenticated, reject' if postfix_smtp_auth_required else 'reject_unauth_destination' }}
+{% if postfix_sasl_access_enabled %}
+smtpd_relay_restrictions =
+    check_sasl_access {{ __postfix_table_type.stdout }}:/etc/postfix/managed/sasl_access,
+{% if postfix_ldap_enabled %}
+    check_sasl_access proxy:ldap:/etc/postfix/managed/ldap-sasl_access.cf,
+{% endif %}
+    reject
+{% else %}
+smtpd_relay_restrictions = permit_sasl_authenticated, reject
+{% endif %}
 {% if postfix_smtp_trusted_only %}
 smtpd_client_restrictions = permit_mynetworks, reject
 {% endif %}
-{% if postfix_smtp_auth_required %}
-smtpd_recipient_restrictions = permit_sasl_authenticated, reject
-{% else %}
+{% if not postfix_smtp_auth_required %}
 smtpd_recipient_restrictions = reject_non_fqdn_recipient, reject_unknown_recipient_domain, reject_unlisted_recipient{% for endpoint in postfix_smtp_policy_services %}, check_policy_service {{ endpoint }}{% endfor %}
 
 {% endif %}
@@ -37,25 +44,44 @@ smtpd_tls_auth_only = yes
 {% if postfix_sender_authorization %}
 {% if postfix_smtp_auth_required %}
 smtpd_sender_restrictions = reject_sender_login_mismatch
-{% elif postfix_account_backend == 'files' %}
-smtpd_sender_restrictions = reject_non_fqdn_sender, check_sender_access {{ __postfix_table_type.stdout }}:/etc/postfix/managed/protected_senders
 {% else %}
-smtpd_sender_restrictions = reject_non_fqdn_sender, check_sender_access proxy:{{ postfix_account_backend }}:/etc/postfix/managed/protected_senders.cf
+smtpd_sender_restrictions = reject_non_fqdn_sender
+{% if postfix_account_backend == 'files' or postfix_ldap_enabled %}
+    check_sender_access {{ __postfix_table_type.stdout }}:/etc/postfix/managed/protected_senders
 {% endif %}
+{% if postfix_account_backend != 'files' %}
+    check_sender_access proxy:{{ postfix_account_backend }}:/etc/postfix/managed/protected_senders.cf
+{% endif %}
+{% if postfix_ldap_enabled and postfix_smtp_enabled %}
+    check_sender_access proxy:ldap:/etc/postfix/managed/ldap-protected_senders.cf
+{% endif %}
+{% endif %}
+{% endif %}
+
+smtpd_sender_login_maps =
+{% if postfix_account_backend == 'files' or postfix_ldap_enabled %}
+    {{ __postfix_table_type.stdout }}:/etc/postfix/managed/senders
+{% endif %}
+{% if postfix_account_backend != 'files' %}
+    proxy:{{ postfix_account_backend }}:/etc/postfix/managed/senders.cf
+    proxy:{{ postfix_account_backend }}:/etc/postfix/managed/alias_domain_senders.cf
+{% endif %}
+{% if postfix_ldap_enabled %}
+    proxy:ldap:/etc/postfix/managed/ldap-senders.cf
 {% endif %}
 {% if postfix_account_backend == 'files' %}
-smtpd_sender_login_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/senders
-virtual_mailbox_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/mailboxes
 virtual_alias_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/virtual_aliases
 virtual_mailbox_domains = {{ postfix_virtual_domains | join(', ') }}
+virtual_mailbox_maps = {{ __postfix_table_type.stdout }}:/etc/postfix/managed/mailboxes
 {% else %}
-smtpd_sender_login_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/managed/senders.cf,
-    proxy:{{ postfix_account_backend }}:/etc/postfix/managed/alias_domain_senders.cf
-virtual_mailbox_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/managed/mailboxes.cf
 virtual_alias_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/managed/virtual_aliases.cf,
     proxy:{{ postfix_account_backend }}:/etc/postfix/managed/alias_domains.cf,
     proxy:{{ postfix_account_backend }}:/etc/postfix/managed/alias_domain_catchalls.cf
 virtual_mailbox_domains = proxy:{{ postfix_account_backend }}:/etc/postfix/managed/domains.cf
+virtual_mailbox_maps = proxy:{{ postfix_account_backend }}:/etc/postfix/managed/mailboxes.cf
+{% endif %}
+{% if postfix_ldap_enabled %}
+    proxy:ldap:/etc/postfix/managed/ldap-mailboxes.cf
 {% endif %}
 virtual_alias_domains =
 virtual_transport = {{ postfix_dovecot_lmtp_transport }}

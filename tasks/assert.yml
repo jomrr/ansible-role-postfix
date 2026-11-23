@@ -117,6 +117,40 @@
     loop_var: __postfix_username
     label: "{{ __postfix_username }}"
 
+- name: POSTFIX | Validate LDAP endpoints and lookup parameters
+  ansible.builtin.assert:
+    that:
+      - postfix_ldap.uris | length > 0
+      - postfix_ldap.uris | reject('match', '^ldaps://([A-Za-z0-9.-]+|\[[A-Fa-f0-9:]+\])(:[0-9]+)?/?\Z') | length == 0
+      - postfix_ldap.ca_file is match('^/[^\s]+\Z')
+      - postfix_ldap.base | trim | length > 0 and postfix_ldap.base is not search('[\r\n\x00]')
+      - postfix_ldap.bind_dn | trim | length > 0 and postfix_ldap.bind_dn is not search('[\r\n\x00]')
+      - postfix_ldap.eligibility_filter is match('^\([^\r\n\x00]+\)\Z')
+      - postfix_ldap.mail_attribute is match('^[a-zA-Z][a-zA-Z0-9-]*\Z')
+      - postfix_ldap.login_attribute is match('^[a-zA-Z][a-zA-Z0-9-]*\Z')
+    quiet: true
+  when: postfix_ldap_enabled
+
+- name: POSTFIX | Validate LDAP bind password for a single-line map setting
+  ansible.builtin.assert:
+    that:
+      - postfix_ldap.bind_password | length > 0
+      - postfix_ldap.bind_password == postfix_ldap.bind_password | trim
+      - postfix_ldap.bind_password is not search('[\r\n\x00]')
+    quiet: true
+  when: postfix_ldap_enabled
+  no_log: true
+
+- name: POSTFIX | Validate explicit submission login keys
+  ansible.builtin.assert:
+    that:
+      - __postfix_login is match('^(?!#)[^\s,\x00]+\Z')
+    quiet: true
+  loop: "{{ postfix_sasl_access_logins }}"
+  loop_control:
+    loop_var: __postfix_login
+    label: "{{ __postfix_login }}"
+
 - name: POSTFIX | Validate SQL query override names
   ansible.builtin.assert:
     that:

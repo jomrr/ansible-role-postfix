@@ -7,15 +7,17 @@
 [![main](https://img.shields.io/github/actions/workflow/status/jomrr/ansible-role-postfix/main.yml?branch=main&label=main)](https://github.com/jomrr/ansible-role-postfix/actions/workflows/main.yml?query=branch%3Amain)
 
 Install Postfix with authenticated TLS submission, sender authorization,
-provider relays and file or SQL account lookups.
+provider relays and file, SQL or LDAP account lookups.
 
 ## Purpose
 
 Install, configure, enable and start Postfix with local delivery, Dovecot SASL
 and LMTP integration, authenticated TLS submission, per-user envelope sender
 authorization, provider-specific relay credentials, optional archive copies and
-PostfixAdmin-compatible MariaDB/MySQL or PostgreSQL account lookups. Unchanged
-runs preserve the queue and do not restart the service.
+PostfixAdmin-compatible MariaDB/MySQL or PostgreSQL account lookups. LDAP can
+supply mailbox recipients, envelope owners and submission permissions over
+verified LDAPS. Unchanged runs preserve the queue and do not restart the
+service.
 
 ## Scope
 
@@ -27,6 +29,8 @@ runs preserve the queue and do not restart the service.
   default, including SMTP and Fetchmail ports.
 - Multiple authorized envelope sender identities per account and distinct
   provider credentials per sender.
+- Optional directory lookups through Postfix proxymap and an explicit SASL login
+  allowlist for authenticated listeners.
 - Provider transports with mandatory TLS and certificate hostname verification,
   including implicit TLS relays.
 - A dedicated Fetchmail listener with source restrictions and
@@ -58,9 +62,11 @@ runs preserve the queue and do not restart the service.
   alias and alias_domain tables. Use a database login with SELECT privileges
   only. Provision it separately and protect remote connections with verified
   TLS.
-- Dovecot authenticates account passwords and owns mailbox delivery. Configure
-  its passdb/userdb against the same text-file or PostfixAdmin account source;
-  full email addresses are the SASL identities in SQL mode.
+- Dovecot authenticates users and delivers mail through LMTP. Its userdb must
+  recognize the recipients accepted by Postfix. With PAM or GSSAPI, use the SASL
+  login reported by Dovecot when granting submission and sender permissions.
+- LDAP requires a directory reader, its bind password and a readable PEM CA file
+  on each mail server. Every LDAPS server name must match its certificate.
 
 ## Dependencies
 
@@ -331,12 +337,71 @@ postfix_local_submitters:
 
 Type: `str`. Required: `false`.
 
-Account lookup backend for recipients, aliases and sender ownership.
+Primary lookup backend for recipients, aliases and sender ownership.
 
 Default:
 
 ```yaml
 postfix_account_backend: files
+```
+
+### `postfix_ldap_enabled`
+
+Type: `bool`. Required: `false`.
+
+Add TLS-verified LDAP mailbox and sender lookups to the primary backend.
+
+Default:
+
+```yaml
+postfix_ldap_enabled: false
+```
+
+### `postfix_ldap`
+
+Type: `dict`. Required: `false`.
+
+Read-only LDAPS connection, directory eligibility filter and attributes
+identifying a mailbox and its SASL owner.
+
+Default:
+
+```yaml
+postfix_ldap:
+  uris: []
+  base: ''
+  bind_dn: ''
+  bind_password: ''
+  ca_file: ''
+  eligibility_filter: ''
+  mail_attribute: mail
+  login_attribute: userPrincipalName
+```
+
+### `postfix_sasl_access_enabled`
+
+Type: `bool`. Required: `false`.
+
+Require a positive SASL login access lookup on every listener requiring SMTP
+AUTH. The default permits authenticated clients.
+
+Default:
+
+```yaml
+postfix_sasl_access_enabled: false
+```
+
+### `postfix_sasl_access_logins`
+
+Type: `list`. Required: `false`.
+
+Explicitly entitled SASL logins, including file-based relay accounts, checked
+before LDAP when the access check is enabled.
+
+Default:
+
+```yaml
+postfix_sasl_access_logins: []
 ```
 
 ### `postfix_virtual_domains`
@@ -379,8 +444,8 @@ postfix_virtual_aliases: {}
 
 Type: `dict`. Required: `false`.
 
-Envelope sender addresses and authorized SASL identities for the text-file
-backend.
+Envelope sender addresses and owners for the file backend or local overrides
+alongside LDAP.
 
 Default:
 
@@ -785,8 +850,8 @@ postfix_database_queries: {}
   settings are replaced.
 - `/etc/postfix/master.cf` Role-owned listeners and transports, without chroot,
   including separate provider TLS modes.
-- `/etc/postfix/managed/` Address tables, compiled indexes and protected SQL
-  connection settings.
+- `/etc/postfix/managed/` Address tables, compiled indexes and protected SQL and
+  LDAP connection settings.
 - `/etc/logrotate.d/ansible-postfix` Daily rotation retaining fourteen
   compressed logs when postfix_log_file is nonempty.
 
@@ -836,6 +901,10 @@ the service is enabled and started on every converge.
   files are root:postfix 0640. Secret-bearing tasks and argument values are
   redacted. Use Ansible Vault or an external secret lookup for credential
   values.
+- LDAP bind credentials are written only to active ldap-*.cf files owned by
+  root:postfix with mode 0640. Rendering suppresses task output, diffs and
+  backups. Disabling a lookup removes its credentials. Keep Postfix and LDAP
+  client debugging off when using bind passwords.
 - Provider relays default to trusted TLS with hostname verification. Direct
   delivery defaults to opportunistic TLS for Internet interoperability.
   postfix_tls_policies overrides the TLS policy for matching next-hop
@@ -846,6 +915,24 @@ the service is enabled and started on every converge.
 
 ## Operational Notes
 
+- LDAP supplements the primary file or PostfixAdmin backend. That backend still
+  defines accepted virtual domains, aliases and its own mailboxes. Use
+  postfix_virtual_domains with files or an active PostfixAdmin domain with SQL.
+  For a given envelope address the first owner map hit wins in the order local
+  postfix_sender_logins, selected SQL maps, then LDAP. Include all owners in a
+  local override for the same address.
+- Each LDAP query combines eligibility_filter with an exact address or login
+  lookup. Mailbox and sender queries look up mail_attribute. The sender map
+  returns login_attribute, which must match the SASL login even when the mail
+  address differs from the UPN.
+- With postfix_sasl_access_enabled, check_sasl_access checks
+  postfix_sasl_access_logins and then the eligible LDAP login when LDAP is
+  enabled. Only an OK permits submission. A missing entry is rejected and a
+  directory lookup error temporarily defers the request. File sender ownership
+  alone does not entitle a login to submit. Authenticated Fetchmail also
+  requires entitlement and still accepts only local recipients. The default
+  permit_sasl_authenticated behavior remains available with every account
+  source.
 - File mode uses postfix_mailboxes, postfix_virtual_aliases,
   postfix_sender_logins and postfix_virtual_domains. Address ownership values
   are lists of SASL identities, allowing shared identities without duplicating
@@ -905,23 +992,14 @@ the service is enabled and started on every converge.
   and postconf -n displays effective nondefault settings. The role never flushes
   or deletes the queue automatically. Custom logfile parents must already exist.
 - Molecule reuses each mail server across file, MariaDB and PostgreSQL
-  configurations. Dovecot and certificate fixtures are installed once; the role
-  installs Postfix and adds each SQL driver when first selected. One MariaDB and
-  one PostgreSQL container serve the entire local dev matrix. No servers are
-  recreated between backend checks.
-- Molecule follows the Forgejo setup with official MariaDB and PostgreSQL images
-  under platforms, separate server and dependency groups, and a role-only
-  Converge play targeting postfix_servers. Molecule owns every container's
-  create/destroy lifecycle. Prepare supplies Dovecot, certificates and database
-  test data. Independent Dovecot fixture sockets allow setup before Postfix
-  installation without creating its service user or spool directories. GitHub
-  workflows use the unchanged Factory defaults.
+  configurations. One MariaDB, one PostgreSQL and one Samba AD container serve
+  all mail servers in each run. The role adds each lookup driver when first
+  selected.
 - Each platform runs the full SMTP integration suite once, including all
   authenticated listeners, both provider TLS modes, queue retries, local sender
-  permissions, LMTP and archives. Backend checks cover SQL account permissions
-  and delivery plus disabled and unknown records; exception checks cover trusted
-  unauthenticated reception. Initial idempotence, configuration recovery and
-  final check mode each run once.
+  permissions, LMTP and archives. The directory checks exercise group
+  membership, disabled logins, local sender overrides, delivery to LDAP
+  recipients and rejection of an untrusted directory certificate.
 - GitHub Actions runs the same tests through the default scenario, with a
   six-platform matrix on main and a single-platform smoke run on dev. Each job
   reuses its mail server and database fixtures for all backends; the local dev
@@ -1033,6 +1111,38 @@ variables contain the real secrets.
         alice@example.org: archive@example.org
 ```
 
+### Authorize Active Directory submission and a local relay account
+
+Configure the authenticated listeners and Dovecot socket as in the
+submission example. Dovecot authenticates the password or Kerberos ticket.
+Postfix checks entitlement at RCPT TO, including for the null envelope
+sender. Keep postfix_sender_authorization enabled to enforce ownership.
+
+This filter selects direct MailUsers members and excludes disabled AD
+accounts. A user with UPN `alice@ad.example.org` and mail `alice@example.org`
+submits as `alice@ad.example.org` and may send from `alice@example.org`.
+A separate Dovecot relay login has explicit permission to send from
+`root@app.example.org`. Keep its login unique across authentication sources.
+
+```yaml
+postfix_virtual_domains: [example.org]
+postfix_ldap_enabled: true
+postfix_ldap:
+  uris: [ldaps://dc1.ad.example.org, ldaps://dc2.ad.example.org]
+  base: DC=ad,DC=example,DC=org
+  bind_dn: CN=mail-reader,OU=Services,DC=ad,DC=example,DC=org
+  bind_password: "{{ vault_mail_ldap_password }}"
+  ca_file: /etc/mail/directory-ca.pem
+  eligibility_filter: "(&(objectClass=user)(memberOf=CN=MailUsers,OU=Groups,DC=ad,DC=example,DC=org)\
+    (!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
+  mail_attribute: mail
+  login_attribute: userPrincipalName
+postfix_sasl_access_enabled: true
+postfix_sasl_access_logins: [relay@example.org]
+postfix_sender_logins:
+  root@app.example.org: [relay@example.org]
+```
+
 ### PostfixAdmin with a local MariaDB socket
 
 PostfixAdmin maintains domains, recipients and aliases. Its schema and the
@@ -1063,6 +1173,9 @@ postfix_database:
 
 ## References
 
+- [Postfix LDAP tables](https://www.postfix.org/ldap_table.5.html)
+- [Postfix SASL access checks](https://www.postfix.org/postconf.5.html#check_sasl_access)
+- [Dovecot role and external authentication](https://github.com/jomrr/ansible-role-dovecot#security-notes)
 - [Postfix SASL](https://www.postfix.org/SASL_README.html)
 - [Postfix TLS](https://www.postfix.org/TLS_README.html)
 - [Postfix TLS policy maps](https://www.postfix.org/postconf.5.html#smtp_tls_policy_maps)

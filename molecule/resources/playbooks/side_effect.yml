@@ -5,6 +5,17 @@
 - name: POSTFIX | Exercise SQL backends and configuration recovery
   hosts: postfix_servers
   gather_facts: true
+  vars:
+    postfix_ldap:
+      uris: ["ldaps://{{ groups['postfix_directory'][0] }}"]
+      bind_dn: CN=postfix-reader,CN=Users,DC=example,DC=test
+      bind_password: 'Molecule-Bind-123!'
+      base: DC=example,DC=test
+      ca_file: /etc/postfix-test/ldap-ca.pem
+      eligibility_filter: "(&(objectClass=user)(memberOf=CN=MailUsers,CN=Users,DC=example,DC=test)\
+        (!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
+      mail_attribute: mail
+      login_attribute: userPrincipalName
   tasks:
     - name: POSTFIX | Exercise each PostfixAdmin backend
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/backend.yml"
@@ -17,6 +28,7 @@
         name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
       vars:
         postfix_account_backend: files
+        postfix_ldap_enabled: true
         postfix_smtp_auth_required: false
         postfix_fetchmail_auth_required: false
 

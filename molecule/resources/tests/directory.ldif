@@ -1,0 +1,26 @@
+dn: CN=Alice,CN=Users,DC=example,DC=test
+objectClass: user
+sAMAccountName: alice
+userPrincipalName: alice@example.test
+mail: directory@example.test
+userAccountControl: 544
+
+dn: CN=Outsider,CN=Users,DC=example,DC=test
+objectClass: user
+sAMAccountName: outsider
+userPrincipalName: outsider@example.test
+mail: outsider@example.test
+userAccountControl: 544
+
+dn: CN=Disabled,CN=Users,DC=example,DC=test
+objectClass: user
+sAMAccountName: disabled
+userPrincipalName: disabled@example.test
+mail: retired@example.test
+userAccountControl: 546
+
+dn: CN=MailUsers,CN=Users,DC=example,DC=test
+objectClass: group
+sAMAccountName: MailUsers
+member: CN=Alice,CN=Users,DC=example,DC=test
+member: CN=Disabled,CN=Users,DC=example,DC=test

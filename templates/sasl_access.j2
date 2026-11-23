@@ -1,0 +1,5 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+{% for login in postfix_sasl_access_logins | unique | sort %}
+{{ login }} OK
+{% endfor %}

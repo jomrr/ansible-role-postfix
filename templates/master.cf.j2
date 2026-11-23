@@ -7,6 +7,8 @@ smtp inet n - n - - smtpd
   -o milter_macro_daemon_name={{ 'ORIGINATING' if postfix_smtp_auth_required else 'INBOUND' }}
 {% if postfix_smtp_auth_required %}
   -o smtpd_milters={{ postfix_submission_milters | join(',') }}
+{% else %}
+  -o smtpd_relay_restrictions=reject_unauth_destination
 {% endif %}
 {% endif %}
 {% if postfix_submission_enabled %}
@@ -14,9 +16,8 @@ smtp inet n - n - - smtpd
   -o syslog_name=postfix/submission
   -o smtpd_tls_security_level=encrypt
   -o smtpd_sasl_auth_enable=yes
-  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
-  -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
-  -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+  -o smtpd_recipient_restrictions=
+  -o smtpd_client_restrictions=
   -o smtpd_sender_restrictions={{ 'reject_sender_login_mismatch' if postfix_sender_authorization else '' }}
   -o smtpd_milters={{ postfix_submission_milters | join(',') }}
 {% endif %}
@@ -25,9 +26,8 @@ smtp inet n - n - - smtpd
   -o syslog_name=postfix/submissions
   -o smtpd_tls_wrappermode=yes
   -o smtpd_sasl_auth_enable=yes
-  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
-  -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
-  -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+  -o smtpd_recipient_restrictions=
+  -o smtpd_client_restrictions=
   -o smtpd_sender_restrictions={{ 'reject_sender_login_mismatch' if postfix_sender_authorization else '' }}
   -o smtpd_milters={{ postfix_submission_milters | join(',') }}
 {% endif %}
@@ -38,8 +38,12 @@ smtp inet n - n - - smtpd
   -o smtpd_tls_security_level={{ 'encrypt' if postfix_fetchmail_auth_required else ('may' if postfix_tls_certificate else 'none') }}
   -o mynetworks={{ postfix_fetchmail_networks | join(',') }}
   -o smtpd_client_restrictions=permit_mynetworks,reject
+{% if postfix_fetchmail_auth_required %}
+  -o smtpd_recipient_restrictions=reject_unauth_destination
+{% else %}
   -o smtpd_relay_restrictions=reject_unauth_destination
-  -o smtpd_recipient_restrictions={{ 'permit_sasl_authenticated,reject' if postfix_fetchmail_auth_required else 'reject_unlisted_recipient' }}
+  -o smtpd_recipient_restrictions=reject_unlisted_recipient
+{% endif %}
   -o smtpd_sender_restrictions=
   -o milter_macro_daemon_name=INBOUND
 {% endif %}

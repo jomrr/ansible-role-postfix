@@ -7,6 +7,12 @@
     name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   vars:
     postfix_account_backend: "{{ __postfix_backend }}"
+    postfix_ldap_enabled: "{{ __postfix_backend == 'pgsql' }}"
+    postfix_sasl_access_enabled: "{{ postfix_ldap_enabled }}"
+    postfix_sasl_access_logins: [bob@example.test]
+    postfix_sender_logins:
+      root@app.example.test: [bob@example.test]
+      outsider-owned@example.test: [outsider@example.test]
     postfix_database:
       hosts: "postfix-{{ lookup('ansible.builtin.env', 'MOLECULE_SCENARIO_NAME') }}-{{ __postfix_backend }}"
       dbname: postfixadmin
@@ -41,3 +47,7 @@
     cmd: ../tests/smtp_checks.py --accounts
     executable: python3
   changed_when: false
+
+- name: POSTFIX | Exercise directory eligibility and TLS with the PostgreSQL lookup chain
+  ansible.builtin.include_tasks: ldap.yml
+  when: __postfix_backend == 'pgsql'

@@ -15,6 +15,28 @@ __postfix_maps:
   - transport
   - tls_policy
 
+__postfix_ldap_maps:
+  - name: mailboxes
+    enabled: "{{ postfix_ldap_enabled }}"
+    key: mail_attribute
+    result: mail_attribute
+    format: '%s'
+  - name: senders
+    enabled: "{{ postfix_ldap_enabled }}"
+    key: mail_attribute
+    result: login_attribute
+    format: '%s'
+  - name: sasl_access
+    enabled: "{{ postfix_ldap_enabled and postfix_sasl_access_enabled }}"
+    key: login_attribute
+    result: login_attribute
+    format: OK
+  - name: protected_senders
+    enabled: "{{ postfix_ldap_enabled and postfix_smtp_enabled and not postfix_smtp_auth_required and postfix_sender_authorization }}"
+    key: mail_attribute
+    result: mail_attribute
+    format: REJECT Sender address requires authenticated submission
+
 __postfix_database_queries:
   domains: >-
     SELECT domain FROM domain WHERE domain='%s' AND active=TRUE AND backupmx=FALSE

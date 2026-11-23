@@ -139,3 +139,19 @@ platforms:
     env:
       POSTGRES_PASSWORD: "molecule-database-secret"
       POSTGRES_DB: "postfixadmin"
+  - name: "pdc-${MOLECULE_SCENARIO_NAME}.example.test"
+    hostname: "pdc-${MOLECULE_SCENARIO_NAME}"
+    image: "docker.io/jomrr/molecule-debian:latest"
+    pre_build_image: true
+    override_command: false
+    systemd: "true"
+    privileged: true
+    extra_opts:
+      - "--uidmap=0:0:10000"
+      - "--uidmap=60000:10000:40000"
+      - "--gidmap=0:0:10000"
+      - "--gidmap=60000:10000:40000"
+      - "--tmpfs=/var/lib/samba:rw,size=1g,mode=0755"
+    network: "postfix-${MOLECULE_SCENARIO_NAME}"
+    groups:
+      - "postfix_directory"

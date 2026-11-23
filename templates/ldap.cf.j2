@@ -1,0 +1,14 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+server_host = {{ postfix_ldap.uris | join(' ') }}
+version = 3
+tls_require_cert = yes
+tls_ca_cert_file = {{ postfix_ldap.ca_file }}
+chase_referrals = no
+bind = yes
+bind_dn = {{ postfix_ldap.bind_dn }}
+bind_pw = {{ postfix_ldap.bind_password }}
+search_base = {{ postfix_ldap.base }}
+query_filter = (&{{ postfix_ldap.eligibility_filter }}({{ postfix_ldap[__postfix_ldap_map.key] }}=%s))
+result_attribute = {{ postfix_ldap[__postfix_ldap_map.result] }}
+result_format = {{ __postfix_ldap_map.format }}

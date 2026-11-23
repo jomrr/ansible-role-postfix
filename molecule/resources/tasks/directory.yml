@@ -1,0 +1,86 @@
+---
+# role: postfix
+# file: molecule/resources/tasks/directory.yml
+
+- name: POSTFIX | Install directory fixture tools once
+  become: true
+  become_user: root
+  ansible.builtin.apt:
+    name: [samba-ad-dc, samba-ad-provision, ldb-tools]
+    update_cache: true
+    policy_rc_d: 101
+
+- name: POSTFIX | Fit the directory fixture IDs into the rootless container namespace
+  become: true
+  become_user: root
+  ansible.builtin.replace:
+    path: /usr/share/samba/setup/idmap_init.ldif
+    regexp: "^{{ __postfix_bound.key }}: .*"
+    replace: "{{ __postfix_bound.key }}: {{ __postfix_bound.value }}"
+  loop:
+    - {key: lowerBound, value: 65536}
+    - {key: upperBound, value: 69999}
+  loop_control:
+    loop_var: __postfix_bound
+    label: "{{ __postfix_bound.key }}"
+
+- name: POSTFIX | Provision the isolated directory
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv:
+      - samba-tool
+      - domain
+      - provision
+      - --realm=EXAMPLE.TEST
+      - --domain=EXAMPLE
+      - "--host-name={{ inventory_hostname_short }}"
+      - --targetdir=/var/lib/samba
+      - --adminpass=Molecule-Admin-123!
+    creates: /var/lib/samba/private/sam.ldb
+  no_log: true
+
+- name: POSTFIX | Select the provisioned directory configuration
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    src: /var/lib/samba/etc/smb.conf
+    dest: /etc/samba/smb.conf
+    state: link
+    force: true
+
+- name: POSTFIX | Create an ordinary directory reader for Postfix
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [samba-tool, user, create, postfix-reader, 'Molecule-Bind-123!']
+  changed_when: true
+  no_log: true
+
+- name: POSTFIX | Seed directory members and a disabled account
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [ldbadd, -H, /var/lib/samba/private/sam.ldb]
+    stdin: "{{ lookup('ansible.builtin.file', '../tests/directory.ldif') }}"
+  changed_when: true
+
+- name: POSTFIX | Start the LDAPS directory
+  become: true
+  become_user: root
+  ansible.builtin.systemd_service:
+    name: samba-ad-dc
+    masked: false
+    state: started
+
+- name: POSTFIX | Wait for the fixture LDAPS listener
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 636
+
+- name: POSTFIX | Read the public directory CA for mail clients
+  become: true
+  become_user: root
+  ansible.builtin.slurp:
+    src: /var/lib/samba/private/tls/ca.pem
+  register: __postfix_directory_ca

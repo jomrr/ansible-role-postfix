@@ -109,11 +109,78 @@ argument_specs:
       postfix_account_backend:
         type: str
         default: files
-        description: Account lookup backend for recipients, aliases and sender ownership.
+        description: Primary lookup backend for recipients, aliases and sender ownership.
         choices:
           - files
           - mysql
           - pgsql
+      postfix_ldap_enabled:
+        type: bool
+        default: false
+        description: Add TLS-verified LDAP mailbox and sender lookups to the primary backend.
+      postfix_ldap:
+        type: dict
+        description: Read-only LDAPS connection, directory eligibility filter and attributes
+          identifying a mailbox and its SASL owner.
+        options:
+          uris:
+            type: list
+            elements: str
+            required: true
+            description: LDAPS endpoints with hostnames matching their certificates.
+          base:
+            type: str
+            required: true
+            description: Base DN of the directory subtree to search.
+          bind_dn:
+            type: str
+            required: true
+            description: Directory reader's bind DN.
+          bind_password:
+            type: str
+            required: true
+            no_log: true
+            description: Directory reader's password from Ansible Vault or a secret store.
+          ca_file:
+            type: str
+            required: true
+            description: Absolute path to the trusted LDAP CA certificate file on the mail
+              server.
+          eligibility_filter:
+            type: str
+            required: true
+            description: Parenthesized LDAP filter selecting entitled, enabled accounts.
+              Postfix also matches the requested address or login.
+          mail_attribute:
+            type: str
+            required: true
+            description: Directory attribute holding the envelope address used for mailbox
+              and sender lookups.
+          login_attribute:
+            type: str
+            required: true
+            description: Directory attribute matching the SASL identity reported by Dovecot,
+              such as userPrincipalName.
+        default:
+          uris: []
+          base: ''
+          bind_dn: ''
+          bind_password: ''
+          ca_file: ''
+          eligibility_filter: ''
+          mail_attribute: mail
+          login_attribute: userPrincipalName
+      postfix_sasl_access_enabled:
+        type: bool
+        default: false
+        description: Require a positive SASL login access lookup on every listener requiring
+          SMTP AUTH. The default permits authenticated clients.
+      postfix_sasl_access_logins:
+        type: list
+        elements: str
+        default: []
+        description: Explicitly entitled SASL logins, including file-based relay accounts,
+          checked before LDAP when the access check is enabled.
       postfix_virtual_domains:
         type: list
         default: []
@@ -131,8 +198,8 @@ argument_specs:
       postfix_sender_logins:
         type: dict
         default: {}
-        description: Envelope sender addresses and authorized SASL identities for the text-file
-          backend.
+        description: Envelope sender addresses and owners for the file backend or local
+          overrides alongside LDAP.
       postfix_dovecot_lmtp_transport:
         type: str
         default: lmtp:unix:private/dovecot-lmtp
