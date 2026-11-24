@@ -3,7 +3,8 @@
 # file: vars/main.yml
 
 __postfix_dir: /etc/postfix/managed
-__postfix_listeners: "{{ postfix_listeners | postfix_listener_services(postfix_outbound) }}"
+__postfix_listeners: >-
+  {{ postfix_listeners | postfix_listener_services(postfix_outbound, postfix_main_cf.get('smtpd_discard_ehlo_keywords', '')) }}
 __postfix_provider_tables: >-
   {{ postfix_providers | postfix_provider_tables(postfix_sender_relays, postfix_provider_port, postfix_default_provider, postfix_relayhost) }}
 __postfix_builtin_tables:
@@ -134,9 +135,7 @@ __postfix_database_queries:
     WHERE ad.alias_domain='%d' AND a.address=CONCAT('%u','@',ad.target_domain)
     AND a.active=TRUE AND ad.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
 
-__postfix_desired_network:
-  - "{{ postfix_main_cf.get('inet_interfaces', postfix_interfaces | join(', ')) }}"
-  - "{{ postfix_main_cf.get('inet_protocols', postfix_protocols) }}"
+__postfix_cache_type: "{{ ['lmdb', 'btree', 'hash'] | select('in', __postfix_drivers.stdout_lines) | first | default('') }}"
 
 __postfix_outbound_parameters:
   - default_transport

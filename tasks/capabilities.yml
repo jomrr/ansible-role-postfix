@@ -1,0 +1,72 @@
+---
+# role: postfix
+# file: tasks/capabilities.yml
+
+- name: POSTFIX | Isolate package discovery from the installed mail configuration
+  become: true
+  become_user: root
+  ansible.builtin.copy:
+    content: |
+      inet_interfaces = all
+      setgid_group = {{ __postfix_setgid_group }}
+    dest: "{{ __postfix_stage.path }}/main.cf"
+    mode: '0600'
+  changed_when: false
+  check_mode: false
+
+- name: POSTFIX | Read compiled map type, version and native proxy map list
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [postconf, -c, "{{ __postfix_stage.path }}", -d, -h, default_database_type, mail_version, proxy_read_maps]
+  register: __postfix_native
+  changed_when: false
+  check_mode: false
+
+- name: POSTFIX | Discover the lookup drivers shipped by the installed package
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [postconf, -c, "{{ __postfix_stage.path }}", -m]
+  register: __postfix_drivers
+  changed_when: false
+  check_mode: false
+
+- name: POSTFIX | Require local sender authorization and a writable native cache driver
+  ansible.builtin.assert:
+    that:
+      - __postfix_native.stdout_lines[1] is version('3.6', '>=')
+      - __postfix_cache_type | length > 0
+    fail_msg: Postfix 3.6 or later and a writable LMDB, Btree or hash driver are required.
+    quiet: true
+
+- name: POSTFIX | Detect SMTP synchronization features on this package build
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [postconf, -c, "{{ __postfix_stage.path }}", -d, smtpd_forbid_bare_newline_reject_code, smtpd_forbid_unauth_pipelining]
+  register: __postfix_smtp_features
+  changed_when: false
+  check_mode: false
+
+- name: POSTFIX | Require native SMTP synchronization checks for network listeners
+  ansible.builtin.assert:
+    that:
+      - "'smtpd_forbid_unauth_pipelining =' in __postfix_smtp_features.stdout"
+      - postfix_forbid_bare_newline == 'no' or 'smtpd_forbid_bare_newline_reject_code =' in __postfix_smtp_features.stdout
+    fail_msg: Update Postfix to a build with SMTP pipelining enforcement and the selected newline policy before enabling listeners.
+    quiet: true
+  when: >-
+    postfix_listeners | length > 0 or
+    postfix_master_cf | selectattr('type', 'equalto', 'inet') | selectattr('command', 'in', ['smtpd', 'postscreen']) | length > 0
+
+- name: POSTFIX | Check the selected SMTP server authentication driver
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv: [postconf, -c, "{{ __postfix_stage.path }}", -a]
+  register: __postfix_sasl_drivers
+  changed_when: false
+  check_mode: false
+  failed_when: __postfix_sasl_drivers.rc != 0 or postfix_sasl_type not in __postfix_sasl_drivers.stdout_lines
+  when: __postfix_listeners | selectattr('auth', 'equalto', 'required') | length > 0

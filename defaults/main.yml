@@ -232,11 +232,11 @@ postfix_smtp_tls_protocols: '>=TLSv1.2'
 # Protocol bounds for both optional and mandatory TLS on incoming SMTP.
 postfix_smtpd_tls_protocols: '>=TLSv1.2'
 
-# Per-client limit on authentication attempts. Zero disables this limit.
-postfix_client_auth_rate_limit: 0
+# Maximum authentication attempts per client per anvil rate interval (normally 60 seconds). Zero disables the limit.
+postfix_client_auth_rate_limit: 30
 
-# Per-client limit on new connections. Zero disables this limit.
-postfix_client_connection_rate_limit: 0
+# Maximum new connections per client per anvil rate interval (normally 60 seconds). Zero disables the limit.
+postfix_client_connection_rate_limit: 60
 
 # Per-client limit on simultaneous connections. Zero disables this limit.
 postfix_client_connection_count_limit: 50

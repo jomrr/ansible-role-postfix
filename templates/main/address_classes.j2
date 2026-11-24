@@ -1,3 +1,4 @@
+address_verify_map = {{ __postfix_cache_type }}:$data_directory/verify_cache
 mydestination = {{ postfix_local_domains | join(', ') }}
 virtual_alias_domains = {{ postfix_virtual_alias_domains | join(', ') }}
 virtual_mailbox_domains = {{ postfix_virtual_mailbox_domains | join(' ') }}{% if postfix_account_backend != 'files' %} proxy:{{ postfix_account_backend }}:{{ __postfix_dir }}/domains.cf{% endif %}

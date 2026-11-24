@@ -1,6 +1,6 @@
 {% filter postfix_unique_services %}
 # Managed by ansible.
-# file: {{ template_destpath }}
+# file: /etc/postfix/master.cf
 
 {% for service in __postfix_listeners %}
 {% if service.postscreen %}
@@ -8,10 +8,13 @@
   -o smtpd_service_name=screen_{{ service.name }}
   -o tlsproxy_service_name=tls_{{ service.name }}
   -o postscreen_tls_security_level={{ service.tls }}
-  -o postscreen_greet_action=enforce
-  -o postscreen_greet_wait={{ service.wait }}
-  -o { postscreen_dnsbl_sites = {{ service.dnsbl | join(', ') }} }
-  -o postscreen_dnsbl_action=enforce
+  -o postscreen_cache_map={{ __postfix_cache_type }}:$data_directory/postscreen_cache_{{ service.name }}
+{% if service.options.smtpd_discard_ehlo_keywords is defined and 'postscreen_discard_ehlo_keywords' not in service.screen_options %}
+  -o { postscreen_discard_ehlo_keywords = {{ service.options.smtpd_discard_ehlo_keywords }} }
+{% endif %}
+{% for parameter, value in service.screen_options.items() %}
+  -o { {{ parameter }} = {{ value }} }
+{% endfor %}
 tls_{{ service.name }} unix - - n - 0 tlsproxy
   -o smtpd_tls_security_level={{ service.tls }}
 screen_{{ service.name }} pass - - n - - smtpd

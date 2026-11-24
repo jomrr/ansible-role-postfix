@@ -2,9 +2,7 @@
 # role: postfix
 # file: molecule/resources/tasks/modes.yml
 
-- name: POSTFIX | Configure a public MX, source relay and internal delivery listener
-  ansible.builtin.include_role:
-    name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+- name: POSTFIX | Exercise independent screened listeners and a text-only ACL update
   vars:
     postfix_outbound: relayhost
     postfix_relayhost: {host: 127.0.0.1, port: 1590, tls: may}
@@ -15,9 +13,23 @@
     postfix_relay_recipients: ["known@{{ groups['postfix_directory'][0] }}"]
     postfix_relay_transport: 'relay:[127.0.0.1]:1590'
     postfix_tables:
+      screen_acl: {type: cidr, entries: {'127.0.0.2/32': "{{ __postfix_screen_rule }}"}}
       clients: {type: native, entries: {blocked@outside.test: REJECT}}
     postfix_listeners:
       smtp: {port: 25, auth: none, tls: may, relay: none, mx: true, postscreen: true, greet_wait: 1s}
+      monitor:
+        address: 127.0.0.1
+        port: 2527
+        auth: none
+        tls: may
+        relay: none
+        mx: true
+        postscreen: true
+        options:
+          postscreen_greet_action: ignore
+          postscreen_dnsbl_action: ignore
+          postscreen_denylist_action: drop
+          postscreen_access_list: $managed_table_screen_acl
       submission: {port: 1588}
       fetchmail: {port: 2525, address: 127.0.0.1, auth: none, tls: none, relay: none, clients: [127.0.0.1/32], sender_login_match: false}
       applications:
@@ -29,12 +41,47 @@
         clients: [127.0.0.1/32]
         sender_login_match: false
         sender_restrictions: [check_sender_access $managed_table_clients]
+  block:
+    - name: POSTFIX | Configure a public MX, source relay and internal delivery listener
+      ansible.builtin.include_role:
+        name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+      vars:
+        __postfix_screen_rule: permit
+
+    - name: POSTFIX | Exercise simultaneous screened listeners and their MX defaults
+      ansible.builtin.script:
+        cmd: ../tests/screened_mx.py permit
+        executable: python3
+      register: __postfix_master_before_acl
+      changed_when: false
+
+    - name: POSTFIX | Stage the new text ACL as after an interruption before reload
+      become: true
+      become_user: root
+      ansible.builtin.lineinfile:
+        path: /etc/postfix/managed/custom-screen_acl
+        regexp: '^127\.0\.0\.2/32 '
+        line: '127.0.0.2/32 reject'
+
+    - name: POSTFIX | Activate the staged text ACL
+      ansible.builtin.include_role:
+        name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+      vars:
+        __postfix_screen_rule: reject
+
+    - name: POSTFIX | Verify that new connections see the updated in-memory policy
+      ansible.builtin.script:
+        cmd: ../tests/screened_mx.py reject
+        executable: python3
+      register: __postfix_master_after_acl
+      changed_when: false
+      failed_when: __postfix_master_after_acl.rc != 0 or __postfix_master_after_acl.stdout != __postfix_master_before_acl.stdout
 
 - name: POSTFIX | Exercise public reception and LDAP mailbox delivery
   become: true
   become_user: root
   ansible.builtin.command:
-    cmd: python3 /etc/postfix-test/smtp_checks.py --trusted-reception
+    argv: [python3, /etc/postfix-test/smtp_checks.py, --trusted-reception, "{{ groups['postfix_directory'][0] }}"]
   changed_when: false
 
 - name: POSTFIX | Exercise source-restricted relay, gateway and custom table

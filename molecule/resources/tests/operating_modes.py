@@ -166,11 +166,11 @@ def gateway(domain: str) -> None:
                 timeout=15,
             ) as client:
                 client.ehlo()
-                client.mail("sender@outside.test")
+                client.mail(f"sender@{domain}")
                 assert client.rcpt(f"unknown@{domain}")[0] == 550
                 client.rset()
                 client.send_message(
-                    message("sender@outside.test", f"known@{domain}", marker)
+                    message(f"sender@{domain}", f"known@{domain}", marker)
                 )
             assert marker.encode() in Sink.received.get(timeout=30)
             with smtplib.SMTP("localhost", 2526, timeout=10) as client:

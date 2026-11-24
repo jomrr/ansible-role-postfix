@@ -2,6 +2,14 @@
 # role: postfix
 # file: molecule/resources/tasks/backend.yml
 
+- name: POSTFIX | Leave a malformed installed main.cf for the first backend change to repair
+  become: true
+  become_user: root
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    line: 'default_process_limit = 1oo'
+  when: __postfix_backend == 'mysql'
+
 - name: POSTFIX | Apply the SQL account backend
   ansible.builtin.include_role:
     name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"

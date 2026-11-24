@@ -14,17 +14,48 @@
 - name: POSTFIX | Validate mail service inputs
   ansible.builtin.import_tasks: assert.yml
 
-- name: POSTFIX | Install Postfix and select native capabilities
-  ansible.builtin.import_tasks: install.yml
+- name: POSTFIX | Install mail service and lookup drivers
+  become: true
+  become_user: root
+  ansible.builtin.package:
+    name: "{{ __postfix_packages + __postfix_backend_packages[postfix_account_backend] + (['postfix-ldap'] if postfix_ldap_enabled else [])
+             + (__postfix_pcre_packages if postfix_tables.values() | selectattr('type', 'defined') | selectattr('type', 'equalto', 'pcre') | length else []) }}"
+    state: present
+    policy_rc_d: "{{ 101 if ansible_facts.pkg_mgr == 'apt' else omit }}"
 
-- name: POSTFIX | Configure mail services and logging
-  ansible.builtin.import_tasks: config.yml
+- name: POSTFIX | Create a private candidate directory on the configuration filesystem
+  become: true
+  become_user: root
+  ansible.builtin.tempfile:
+    path: /etc/postfix
+    prefix: .candidate-
+    state: directory
+  register: __postfix_stage
+  changed_when: false
+  check_mode: false
 
-- name: POSTFIX | Converge lookup sources and indexes
-  ansible.builtin.import_tasks: tables.yml
+- name: POSTFIX | Validate and activate one configuration generation
+  block:
+    - name: POSTFIX | Discover installed package capabilities in isolation
+      ansible.builtin.import_tasks: capabilities.yml
 
-- name: POSTFIX | Configure SQL and LDAP connections
-  ansible.builtin.import_tasks: lookups.yml
+    - name: POSTFIX | Validate the candidate and configure logging
+      ansible.builtin.import_tasks: config.yml
 
-- name: POSTFIX | Apply configuration and start Postfix
-  ansible.builtin.import_tasks: service.yml
+    - name: POSTFIX | Converge lookup sources and indexes
+      ansible.builtin.import_tasks: tables.yml
+
+    - name: POSTFIX | Configure SQL and LDAP connections
+      ansible.builtin.import_tasks: lookups.yml
+
+    - name: POSTFIX | Activate the prepared mail configuration
+      ansible.builtin.import_tasks: service.yml
+  always:
+    - name: POSTFIX | Remove this run's private validation files
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ __postfix_stage.path }}"
+        state: absent
+      changed_when: false
+      check_mode: false

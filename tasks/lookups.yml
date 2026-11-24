@@ -19,20 +19,6 @@
     label: "{{ __postfix_database_query.key }}"
   no_log: true
   when: postfix_account_backend != 'files'
-  notify: reload postfix
-
-- name: POSTFIX | Remove SQL credentials when using text files
-  become: true
-  become_user: root
-  ansible.builtin.file:
-    path: "/etc/postfix/managed/{{ __postfix_map }}.cf"
-    state: absent
-  loop: "{{ __postfix_database_queries.keys() }}"
-  loop_control:
-    loop_var: __postfix_map
-    label: "{{ __postfix_map }}"
-  when: postfix_account_backend == 'files'
-  notify: reload postfix
 
 - name: POSTFIX | Write protected LDAP lookup configurations
   become: true
@@ -50,7 +36,6 @@
     label: "{{ __postfix_ldap_map.name }}"
   no_log: true
   diff: false
-  notify: reload postfix
 
 - name: POSTFIX | Write protected LDAP alias and distribution-list lookups
   become: true
@@ -68,4 +53,3 @@
   when: postfix_ldap_enabled
   no_log: true
   diff: false
-  notify: reload postfix

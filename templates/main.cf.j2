@@ -1,6 +1,6 @@
 {% filter postfix_main_parameters(postfix_main_cf) %}
 # Managed by ansible.
-# file: {{ template_destpath }}
+# file: /etc/postfix/main.cf
 
 {% include 'main/identity.j2' +%}
 {% include 'main/address_classes.j2' +%}

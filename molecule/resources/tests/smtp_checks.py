@@ -192,13 +192,13 @@ def verify_authentication(context: ssl.SSLContext) -> None:
             raise AssertionError("Wrong password accepted")
 
 
-def verify_trusted_reception(context: ssl.SSLContext) -> None:
+def verify_trusted_reception(context: ssl.SSLContext, domain: str) -> None:
     """Explicit authentication exceptions must still prevent relaying and spoofing."""
     with smtplib.SMTP(
         "localhost", 25, local_hostname="mx.outside.test", timeout=10
     ) as client:
         client.ehlo()
-        assert client.mail("sender@outside.test")[0] == 250
+        assert client.mail(f"sender@{domain}")[0] == 250
         assert client.rcpt("sink@outside.test")[0] >= 500, (
             "Unauthenticated relay accepted"
         )
@@ -208,9 +208,19 @@ def verify_trusted_reception(context: ssl.SSLContext) -> None:
             code, response = client.rcpt("bob@example.test")
             assert code >= 500 and b"requires authenticated submission" in response
         client.rset()
+        assert client.mail("user@absent.invalid")[0] == 250
+        code, response = client.rcpt("directory@example.test")
+        assert code // 100 in (4, 5) and b"Sender address rejected" in response, (
+            code,
+            response,
+        )
+        client.rset()
+        assert client.mail("")[0] == 250
+        assert client.rcpt("directory@example.test")[0] == 250
+        client.rset()
         token = uuid.uuid4().hex
         client.send_message(
-            message("sender@outside.test", "directory@example.test", token)
+            message(f"sender@{domain}", "directory@example.test", token)
         )
     wait_for(lambda: in_mailbox("directory", token), "LDAP mailbox delivery failed")
     with submission(context, "bob") as client:
@@ -379,7 +389,7 @@ def main() -> None:
     """Run isolated provider fixtures while exercising the configured mail service."""
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
-    modes.add_argument("--trusted-reception", action="store_true")
+    modes.add_argument("--trusted-reception", metavar="SENDER_DOMAIN")
     modes.add_argument("--accounts", action="store_true")
     modes.add_argument("--null-client", action="store_true")
     args = parser.parse_args()
@@ -388,7 +398,7 @@ def main() -> None:
         verify_accounts(client_tls)
         return
     if args.trusted_reception:
-        verify_trusted_reception(client_tls)
+        verify_trusted_reception(client_tls, args.trusted_reception)
         return
     server_tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     server_tls.minimum_version = ssl.TLSVersion.TLSv1_2

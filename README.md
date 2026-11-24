@@ -43,8 +43,10 @@ routes. Select a starting point from the operating modes below.
 
 ## Requirements
 
-- Postfix 3.6 or later. Network listeners with normalize or reject require the
-  corresponding security update, including vendor backports.
+- Postfix 3.6 or later. Network listeners require a build with
+  smtpd_forbid_unauth_pipelining. The normalize and reject newline policies also
+  require their corresponding security update. Vendor backports are detected by
+  capability.
 - For authenticated listeners, provide a PEM chain and key and either a Dovecot
   auth socket or a working Cyrus SASL application configuration.
 - For virtual delivery, the LMTP backend must recognize the same recipients.
@@ -622,7 +624,8 @@ postfix_database_queries: {}
 Type: `dict`. Required: `false`.
 
 Named TCP listeners with independent binding, TLS, authentication, relay and
-recipient policies. See the operating examples.
+recipient policies. Listener options also configure native postscreen policy on
+a screened frontend.
 
 Default:
 
@@ -907,24 +910,26 @@ postfix_smtpd_tls_protocols: '>=TLSv1.2'
 
 Type: `int`. Required: `false`.
 
-Per-client limit on authentication attempts. Zero disables this limit.
+Maximum authentication attempts per client per anvil rate interval (normally 60
+seconds). Zero disables the limit.
 
 Default:
 
 ```yaml
-postfix_client_auth_rate_limit: 0
+postfix_client_auth_rate_limit: 30
 ```
 
 ### `postfix_client_connection_rate_limit`
 
 Type: `int`. Required: `false`.
 
-Per-client limit on new connections. Zero disables this limit.
+Maximum new connections per client per anvil rate interval (normally 60
+seconds). Zero disables the limit.
 
 Default:
 
 ```yaml
-postfix_client_connection_rate_limit: 0
+postfix_client_connection_rate_limit: 60
 ```
 
 ### `postfix_client_connection_count_limit`
@@ -1045,8 +1050,8 @@ postfix_logrotate_count: 14
   per-listener restriction lists.
 - `/etc/postfix/master.cf` SMTP listeners, delivery transports and optional
   postscreen or additional native services.
-- `/etc/postfix/managed/` Address tables, native indexes and protected
-  connection settings.
+- `/etc/postfix/managed/` Address tables, native indexes, protected connection
+  settings and a root-only record of the last activated configuration.
 - `/etc/logrotate.d/ansible-postfix` Installed when direct file logging is
   enabled and removed when switching to system logging.
 
@@ -1067,8 +1072,16 @@ enables the service.
 
 - Missing, changed or older indexes are built with postmap or postalias during
   convergence. Only the affected tables are rebuilt.
-- Main, master and lookup connection changes run postfix check before reload.
-  Interface or IP protocol changes require a service restart.
+- The role renders main.cf and master.cf together in a private directory and
+  runs native Postfix checks before installation. A rejected candidate leaves
+  the installed pair and running service in place. A corrected inventory can
+  also replace an invalid installed configuration.
+- Changes to the configuration pair, SQL or LDAP connections and cidr, regexp,
+  pcre or texthash sources trigger activation. The role records success after
+  the service action and retries an interrupted activation on the next run.
+  Changes to TCP listeners, interface bindings, protocols or the
+  disabled-service list use a restart so bind failures reach Ansible. Other
+  policy changes use a reload. Superseded lookups are retired after activation.
 
 ## Security Notes
 
@@ -1097,10 +1110,22 @@ enables the service.
   policy_services. Set mx for inbound checks and postscreen for pre-greeting
   screening. Set helo_restrictions, sender_restrictions, recipient_restrictions
   or native options on the individual listener.
-- Per-listener client_auth_rate_limit, client_connection_rate_limit and
-  client_connection_count_limit override the global anvil settings. Postfix
-  normally exempts trusted networks. Define the native event-limit exceptions
-  explicitly if trusted clients should also be counted.
+- The SMTP server enforces command synchronization. The anvil defaults are 30
+  AUTH attempts and 60 new connections per client and service in each
+  anvil_rate_time_unit (normally 60 seconds). Account for shared client IPs when
+  setting listener-specific limits. Zero disables the corresponding limit.
+  Postfix normally exempts mynetworks through
+  smtpd_client_event_limit_exceptions. client_connection_count_limit controls
+  simultaneous connections.
+- The MX preset checks sender domains, hides the ETRN and DSN extensions and
+  rejects ETRN requests. Normal non-delivery reports still use the null envelope
+  sender. For an authorized ETRN service, set both smtpd_discard_ehlo_keywords
+  and smtpd_etrn_restrictions in its listener options.
+- Each screened listener has its own writable cache. The role selects an
+  installed LMDB, Btree or hash driver for postscreen and address verification.
+  Native postscreen_* listener options apply to the front end. For observation,
+  set postscreen_greet_action and postscreen_dnsbl_action to ignore. Configure
+  the actions for any additional tests you enable in the same options mapping.
 - Closed outbound mode rejects foreign recipients even after SMTP AUTH and sends
   a permanent non-delivery notification for local submissions. Explicit
   transport routes and providers require an enabled outbound mode. Relay domains
@@ -1249,7 +1274,7 @@ postfix_listeners:
     port: 587
     milters: ['inet:127.0.0.1:8891']
     policy_services: ['inet:127.0.0.1:12340']
-    client_auth_rate_limit: 30
+    client_auth_rate_limit: 15
   mx:
     port: 25
     auth: none
@@ -1258,7 +1283,7 @@ postfix_listeners:
     mx: true
     milters: ['inet:127.0.0.1:8891', 'inet:127.0.0.1:8893']
     policy_services: ['unix:private/policy-spf']
-    client_connection_rate_limit: 60
+    client_connection_rate_limit: 120
 ```
 
 ### Both Sieve return paths and Fetchmail

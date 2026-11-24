@@ -51,3 +51,63 @@
     cmd: >-
       python3 /etc/postfix-test/operating_modes.py recovery --pid {{ __postfix_original_master.stdout | trim }} --map-type {{ __postfix_recovery_type.stdout }}
   changed_when: false
+
+- name: POSTFIX | Stage the desired master entry without signalling the daemon
+  become: true
+  become_user: root
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/master.cf
+    line: '127.0.0.1:1589 inet n - n - - smtpd'
+
+- name: POSTFIX | Confirm the staged listener is still inactive
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 1589
+    state: stopped
+    timeout: 5
+
+- name: POSTFIX | Record the staged pair before reconciliation
+  ansible.builtin.command:
+    argv: [sha256sum, /etc/postfix/main.cf, /etc/postfix/master.cf]
+  changed_when: false
+  register: __postfix_staged_pair
+
+- name: POSTFIX | Activate the staged listener without any further configuration file edits
+  ansible.builtin.include_role:
+    name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+  vars:
+    postfix_master_cf:
+      - {name: '127.0.0.1:1589', type: inet, private: 'n', command: smtpd}
+    postfix_local_aliases: {postmaster: root, monitoring: root}
+
+- name: POSTFIX | Reject a malformed candidate while the staged SMTP listener serves mail
+  block:
+    - name: POSTFIX | Request an invalid numeric value and a different service table
+      ansible.builtin.include_role:
+        name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+      vars:
+        postfix_main_cf: {default_process_limit: 1oo}
+
+    - name: POSTFIX | Flag unexpected acceptance of the candidate
+      ansible.builtin.fail:
+        msg: The invalid Postfix candidate was accepted.
+  rescue:
+    - name: POSTFIX | Require the native numeric validation failure
+      ansible.builtin.assert:
+        that: >-
+          ansible_failed_result.results | default([ansible_failed_result]) | selectattr('stderr', 'defined')
+          | map(attribute='stderr') | select('search', 'bad numerical configuration: default_process_limit') | length > 0
+
+- name: POSTFIX | Verify that both files still match the staged pair byte for byte
+  ansible.builtin.command:
+    argv: [sha256sum, /etc/postfix/main.cf, /etc/postfix/master.cf]
+  register: __postfix_serving_pair
+  changed_when: false
+  failed_when: __postfix_serving_pair.rc != 0 or __postfix_serving_pair.stdout != __postfix_staged_pair.stdout
+
+- name: POSTFIX | Verify the running master serves the recovered listener
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 1589
+    search_regex: '^220 '
+    timeout: 10

@@ -1,0 +1,39 @@
+---
+DOCUMENTATION:
+  module: postfix_activate
+  short_description: Publish a validated configuration and reconcile the Postfix master
+  description:
+    - Compares the candidate and reload-sensitive files with the last successful service action.
+    - Publishes the pair checked by the role and records activation only after the service command succeeds.
+  options:
+    candidate:
+      description: Private configuration directory created by the role under /etc/postfix.
+      type: path
+      required: true
+    lookup_files:
+      description: Desired text lookups and SQL or LDAP connection files read into daemon memory.
+      type: list
+      elements: path
+      required: true
+    service_manager:
+      description: Service manager discovered on the target.
+      type: str
+      required: true
+    backup:
+      description: Save existing configuration files before replacing their contents.
+      type: bool
+      default: false
+  author:
+    - Jonas Mauer
+EXAMPLES: |-
+  - name: Activate the validated Postfix generation
+    postfix_activate:
+      candidate: /etc/postfix/.candidate-example
+      lookup_files: []
+      service_manager: systemd
+RETURN:
+  action:
+    description: Service action needed for the requested generation.
+    type: str
+    returned: always
+    sample: reload

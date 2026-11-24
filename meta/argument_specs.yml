@@ -309,7 +309,8 @@ argument_specs:
         type: dict
         default: {}
         description: Named TCP listeners with independent binding, TLS, authentication,
-          relay and recipient policies. See the operating examples.
+          relay and recipient policies. Listener options also configure native postscreen
+          policy on a screened frontend.
       postfix_outbound:
         type: str
         default: none
@@ -458,12 +459,14 @@ argument_specs:
         description: Protocol bounds for both optional and mandatory TLS on incoming SMTP.
       postfix_client_auth_rate_limit:
         type: int
-        default: 0
-        description: Per-client limit on authentication attempts. Zero disables this limit.
+        default: 30
+        description: Maximum authentication attempts per client per anvil rate interval
+          (normally 60 seconds). Zero disables the limit.
       postfix_client_connection_rate_limit:
         type: int
-        default: 0
-        description: Per-client limit on new connections. Zero disables this limit.
+        default: 60
+        description: Maximum new connections per client per anvil rate interval (normally
+          60 seconds). Zero disables the limit.
       postfix_client_connection_count_limit:
         type: int
         default: 50

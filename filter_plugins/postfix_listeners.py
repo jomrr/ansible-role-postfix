@@ -162,6 +162,26 @@ def validate_policy(name: str, spec: dict[str, Any]) -> None:
         raise ValueError("Invalid postscreen DNSBL site")
 
 
+def screen_options(spec: dict[str, Any], extra: dict[str, str]) -> dict[str, str]:
+    """Move native postscreen overrides out of the SMTP daemon options."""
+    overrides = {
+        key: extra.pop(key) for key in list(extra) if key.startswith("postscreen_")
+    }
+    if overrides and not spec.get("postscreen"):
+        raise ValueError("Postscreen options require an enabled postscreen listener")
+    for key, value in overrides.items():
+        if key == "postscreen_cache_map":
+            raise ValueError(f"Invalid postscreen option {key}")
+        if key.endswith("_action") and value not in {"ignore", "enforce", "drop"}:
+            raise ValueError(f"Invalid postscreen action for {key}")
+    return {
+        "postscreen_greet_action": "enforce",
+        "postscreen_dnsbl_action": "enforce",
+        "postscreen_greet_wait": spec.get("greet_wait", "6s"),
+        "postscreen_dnsbl_sites": ", ".join(spec.get("dnsbl_sites", [])),
+    } | overrides
+
+
 def bind_service(
     name: str,
     address: str,
@@ -220,6 +240,8 @@ def restrictions(spec: dict[str, Any], outbound: str) -> dict[str, list[str]]:
             if auth == "required"
             else "$managed_sender_protection"
         )
+    if spec.get("mx"):
+        senders.append("reject_unknown_sender_domain")
     recipients = (
         ["reject_non_fqdn_recipient", "reject_unknown_recipient_domain"]
         if spec.get("mx")
@@ -245,7 +267,9 @@ class FilterModule:
     """Expose listener and raw option validation."""
 
     @staticmethod
-    def listener_services(data: dict[str, Any], outbound: str) -> list[dict[str, Any]]:
+    def listener_services(
+        data: dict[str, Any], outbound: str, discard_ehlo: str = ""
+    ) -> list[dict[str, Any]]:
         """Build service policies using stable names independent of other listeners."""
         services = []
         bindings: dict[int, list[IPv4Address | IPv6Address | None]] = {}
@@ -266,6 +290,11 @@ class FilterModule:
                 if auth == "required"
                 else "INBOUND",
             }
+            if spec.get("mx"):
+                options["smtpd_etrn_restrictions"] = "reject"
+                options["smtpd_discard_ehlo_keywords"] = ", ".join(
+                    filter(None, ("silent-discard, etrn, dsn", discard_ehlo))
+                )
             if spec.get("clients"):
                 options["mynetworks"] = ", ".join(
                     network_text(n) for n in spec["clients"]
@@ -286,6 +315,7 @@ class FilterModule:
                 raise ValueError(
                     f"Use the typed listener fields for authentication and relay on {name}"
                 )
+            frontend = screen_options(spec, extra)
             services.append(
                 {
                     "name": name,
@@ -296,8 +326,7 @@ class FilterModule:
                     "policy": policy,
                     "options": options | extra,
                     "postscreen": spec.get("postscreen", False),
-                    "dnsbl": spec.get("dnsbl_sites", []),
-                    "wait": spec.get("greet_wait", "6s"),
+                    "screen_options": frontend,
                 }
             )
         return services
