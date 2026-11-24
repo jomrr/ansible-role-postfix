@@ -2,9 +2,11 @@
 # role: postfix
 # file: molecule/resources/playbooks/side_effect.yml
 
-- name: POSTFIX | Exercise the closed installation and repair interrupted updates
+- name: POSTFIX | Exercise the closed installation and native map indexes
   hosts: postfix_servers
   gather_facts: false
+  environment:
+    PYTHONPATH: /etc/postfix-test
   tasks:
     - name: POSTFIX | Start recovery with an empty fact cache
       ansible.builtin.meta: clear_facts
@@ -24,6 +26,8 @@
 - name: POSTFIX | Exercise SMTP operating modes on the installed servers
   hosts: postfix_servers
   gather_facts: true
+  environment:
+    PYTHONPATH: /etc/postfix-test
   vars_files: [../vars/mail.yml, ../vars/directory.yml]
   vars:
     postfix_ldap_alias_queries:
@@ -47,6 +51,8 @@
 - name: POSTFIX | Exercise a null client without network listeners
   hosts: postfix_servers
   gather_facts: true
+  environment:
+    PYTHONPATH: /etc/postfix-test
   tasks:
     - name: POSTFIX | Configure and test the smarthost
       ansible.builtin.import_tasks: ../tasks/null_client.yml

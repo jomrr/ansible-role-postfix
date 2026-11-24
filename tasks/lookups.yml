@@ -2,16 +2,17 @@
 # role: postfix
 # file: tasks/lookups.yml
 
-- name: POSTFIX | Render SQL lookup configurations
+- name: lookups | Render SQL lookup configurations
   become: true
   become_user: root
   ansible.builtin.template:
     src: database.cf.j2
-    dest: "/etc/postfix/managed/{{ __postfix_database_query.key }}.cf"
+    dest: "{{ __postfix_dir }}/{{ __postfix_database_query.key }}.cf"
     owner: root
     group: postfix
     mode: '0640'
     backup: false
+  notify: reload postfix
   diff: false
   loop: "{{ __postfix_database_queries | combine(postfix_database_queries) | dict2items }}"
   loop_control:
@@ -20,16 +21,17 @@
   no_log: true
   when: postfix_account_backend != 'files'
 
-- name: POSTFIX | Write protected LDAP lookup configurations
+- name: lookups | Write protected LDAP lookup configurations
   become: true
   become_user: root
   ansible.builtin.template:
     src: ldap.cf.j2
-    dest: "/etc/postfix/managed/ldap-{{ __postfix_ldap_map.name }}.cf"
+    dest: "{{ __postfix_dir }}/ldap-{{ __postfix_ldap_map.name }}.cf"
     owner: root
     group: postfix
     mode: '0640'
     backup: false
+  notify: reload postfix
   loop: "{{ __postfix_ldap_maps | selectattr('enabled') }}"
   loop_control:
     loop_var: __postfix_ldap_map
@@ -37,7 +39,7 @@
   no_log: true
   diff: false
 
-- name: POSTFIX | Write protected LDAP alias and distribution-list lookups
+- name: lookups | Write protected LDAP alias and distribution-list lookups
   become: true
   become_user: root
   ansible.builtin.template:
@@ -47,9 +49,22 @@
     group: postfix
     mode: '0640'
     backup: false
+  notify: reload postfix
   loop: "{{ postfix_ldap_alias_queries.keys() }}"
   loop_control:
     loop_var: __postfix_alias
   when: postfix_ldap_enabled
   no_log: true
   diff: false
+
+- name: lookups | Remove SQL credentials when using text files
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ __postfix_dir }}/{{ __postfix_map }}.cf"
+    state: absent
+  loop: "{{ __postfix_database_queries.keys() }}"
+  loop_control:
+    loop_var: __postfix_map
+    label: "{{ __postfix_map }}"
+  when: postfix_account_backend == 'files'

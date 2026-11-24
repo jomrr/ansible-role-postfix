@@ -38,6 +38,9 @@
       - --targetdir=/var/lib/samba
       - --adminpass=Molecule-Admin-123!
     creates: /var/lib/samba/private/sam.ldb
+  register: __postfix_provision
+  changed_when: __postfix_provision.changed
+  failed_when: __postfix_provision.rc != 0
   no_log: true
 
 - name: POSTFIX | Select the provisioned directory configuration
@@ -54,7 +57,9 @@
   become_user: root
   ansible.builtin.command:
     argv: [samba-tool, user, create, postfix-reader, 'Molecule-Bind-123!']
-  changed_when: true
+  register: __postfix_create_reader
+  changed_when: __postfix_create_reader.rc == 0
+  failed_when: __postfix_create_reader.rc != 0
   no_log: true
 
 - name: POSTFIX | Seed directory members and a disabled account
@@ -63,7 +68,9 @@
   ansible.builtin.command:
     argv: [ldbadd, -H, /var/lib/samba/private/sam.ldb]
     stdin: "{{ lookup('ansible.builtin.file', '../tests/directory.ldif') }}"
-  changed_when: true
+  register: __postfix_seed_directory
+  changed_when: __postfix_seed_directory.rc == 0
+  failed_when: __postfix_seed_directory.rc != 0
 
 - name: POSTFIX | Start the LDAPS directory
   become: true

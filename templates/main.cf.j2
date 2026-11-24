@@ -1,11 +1,11 @@
-{% filter postfix_main_parameters(postfix_main_cf) %}
-{{ ansible_managed | comment }}
-# file: /etc/postfix/main.cf
+{{ ansible_managed | comment(prefix_count=0, postfix_count=0) }}
+# file: {{ template_destpath }}
 
-{% include 'main/identity.j2' +%}
-{% include 'main/address_classes.j2' +%}
-{% include 'main/listeners.j2' +%}
-{% include 'main/outbound.j2' +%}
-{% include 'main/tls.j2' +%}
-{% include 'main/limits.j2' +%}
+{% filter postfix_main_parameters(postfix_main_cf) %}
+{% include 'main/_identity.j2' +%}
+{% include 'main/_address_classes.j2' +%}
+{% include 'main/_listeners.j2' +%}
+{% include 'main/_outbound.j2' +%}
+{% include 'main/_tls.j2' +%}
+{% include 'main/_limits.j2' +%}
 {% endfilter -%}

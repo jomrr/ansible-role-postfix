@@ -15,6 +15,7 @@
 - name: POSTFIX | Exercise TLS smarthost delivery from local sendmail
   become: true
   become_user: root
-  ansible.builtin.command:
-    cmd: python3 /etc/postfix-test/smtp_checks.py --null-client
+  ansible.builtin.script:
+    executable: python3
+    cmd: ../tests/smtp_checks.py --null-client
   changed_when: false

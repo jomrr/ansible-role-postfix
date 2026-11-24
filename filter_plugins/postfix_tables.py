@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -158,16 +158,6 @@ def map_parameters(
     return dict(result)
 
 
-def reload_files(
-    tables: dict[str, Any], sql: Iterable[str], ldap: Iterable[str]
-) -> list[str]:
-    """Select the desired daemon-cached lookups before retiring superseded files."""
-    paths = [table["path"] for table in tables.values() if not table["suffix"]]
-    paths.extend(f"{DIRECTORY}/{name}.cf" for name in sql)
-    paths.extend(f"{DIRECTORY}/ldap-{name}.cf" for name in ldap)
-    return sorted(paths)
-
-
 def exposed_indexes(tables: dict[str, Any], files: list[dict[str, Any]]) -> list[str]:
     """Restrict an existing index before a public table is rewritten with secrets."""
     private = {
@@ -241,7 +231,6 @@ class FilterModule:
             "postfix_table_catalog": table_catalog,
             "postfix_map_parameters": map_parameters,
             "postfix_stale_indexes": stale_indexes,
-            "postfix_reload_files": reload_files,
             "postfix_exposed_indexes": exposed_indexes,
             "postfix_obsolete_maps": cls.obsolete_maps,
         }

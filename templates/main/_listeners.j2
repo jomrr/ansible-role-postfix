@@ -8,13 +8,9 @@ smtpd_tls_auth_only = yes
 smtpd_tls_security_level = none
 smtpd_helo_required = yes
 disable_vrfy_command = yes
-{% if 'smtpd_forbid_unauth_pipelining =' in __postfix_package.smtp_features %}
 smtpd_forbid_unauth_pipelining = yes
-{% endif %}
-{% if 'smtpd_forbid_bare_newline_reject_code =' in __postfix_package.smtp_features %}
 smtpd_forbid_bare_newline = {{ postfix_forbid_bare_newline }}
 smtpd_forbid_bare_newline_exclusions = {{ postfix_bare_newline_exclusions | join(', ') }}
-{% endif %}
 smtpd_client_auth_rate_limit = {{ postfix_client_auth_rate_limit }}
 smtpd_client_connection_rate_limit = {{ postfix_client_connection_rate_limit }}
 smtpd_client_connection_count_limit = {{ postfix_client_connection_count_limit }}
@@ -30,8 +26,8 @@ managed_sender_protection = check_sender_access $managed_protected_map
     check_sender_access proxy:ldap:{{ __postfix_dir }}/ldap-protected_senders.cf
 {% endif %}
 {% endif %}
-{% if (postfix_ldap_enabled or postfix_account_backend != 'files') %}
-proxy_read_maps = {{ __postfix_package.proxy_maps }}
+proxy_read_maps = $local_recipient_maps $virtual_mailbox_domains $virtual_mailbox_maps
+    $virtual_alias_maps $smtpd_sender_login_maps $smtp_tls_policy_maps
 {% if postfix_ldap_enabled and postfix_sasl_access_enabled %}
     proxy:ldap:{{ __postfix_dir }}/ldap-sasl_access.cf
 {% endif %}
@@ -41,7 +37,6 @@ proxy_read_maps = {{ __postfix_package.proxy_maps }}
 {% endif %}
 {% if postfix_ldap_enabled %}
     proxy:ldap:{{ __postfix_dir }}/ldap-protected_senders.cf
-{% endif %}
 {% endif %}
 {% endif %}
 {% for service in __postfix_listeners %}

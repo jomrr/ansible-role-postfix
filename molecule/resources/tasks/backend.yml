@@ -2,14 +2,6 @@
 # role: postfix
 # file: molecule/resources/tasks/backend.yml
 
-- name: POSTFIX | Leave a malformed installed main.cf for the first backend change to repair
-  become: true
-  become_user: root
-  ansible.builtin.lineinfile:
-    path: /etc/postfix/main.cf
-    line: 'default_process_limit = 1oo'
-  when: __postfix_backend == 'mysql'
-
 - name: POSTFIX | Apply the SQL account backend
   ansible.builtin.include_role:
     name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
@@ -54,8 +46,9 @@
 - name: POSTFIX | Exercise SQL-backed authentication policy and delivery
   become: true
   become_user: root
-  ansible.builtin.command:
-    cmd: python3 /etc/postfix-test/smtp_checks.py --accounts
+  ansible.builtin.script:
+    executable: python3
+    cmd: ../tests/smtp_checks.py --accounts
   changed_when: false
 
 - name: POSTFIX | Exercise directory eligibility and TLS with the PostgreSQL lookup chain
@@ -65,7 +58,8 @@
 - name: POSTFIX | Exercise TLS submission, relays and queue retries on the installed mail servers
   become: true
   become_user: root
-  ansible.builtin.command:
-    cmd: python3 /etc/postfix-test/smtp_checks.py
+  ansible.builtin.script:
+    executable: python3
+    cmd: ../tests/smtp_checks.py
   changed_when: false
   when: __postfix_backend == 'mysql'

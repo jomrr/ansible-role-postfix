@@ -2,6 +2,10 @@
 # role: postfix
 # file: vars/main.yml
 
+__postfix_required_facts: [fqdn, system, os_family, distribution, pkg_mgr, service_mgr]
+__postfix_required_facts_subsets: ['!all', '!min', platform, distribution, pkg_mgr, service_mgr]
+__postfix_hostname: "{{ postfix_hostname | default(ansible_facts.fqdn | default(inventory_hostname)) }}"
+
 __postfix_packages: >-
   {{ __postfix_base_packages
      + __postfix_backend_packages[postfix_account_backend]
@@ -66,8 +70,6 @@ __postfix_builtin_tables:
     parameter: relay_recipient_maps
     entries: "{{ dict(postfix_relay_recipients | zip_longest([], fillvalue='OK')) }}"
 
-__postfix_table_type: >-
-  {{ ([__postfix_package.default_map, 'lmdb', 'cdb', 'hash', 'btree'] | select('in', __postfix_package.drivers) | first) }}
 __postfix_tables: "{{ __postfix_builtin_tables | postfix_table_catalog(postfix_tables, __postfix_table_type) }}"
 __postfix_map_parameters: >-
   {{ __postfix_tables | postfix_map_parameters(postfix_account_backend, postfix_ldap_enabled, postfix_ldap_alias_queries, postfix_tls_policy_maps) }}
@@ -140,8 +142,6 @@ __postfix_database_queries:
     JOIN alias_domain ad ON a.domain=ad.target_domain JOIN domain d ON d.domain=ad.target_domain
     WHERE ad.alias_domain='%d' AND a.address=CONCAT('%u','@',ad.target_domain)
     AND a.active=TRUE AND ad.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
-
-__postfix_cache_type: "{{ ['lmdb', 'btree', 'hash'] | select('in', __postfix_package.drivers) | first | default('') }}"
 
 __postfix_outbound_parameters:
   - default_transport

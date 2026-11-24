@@ -5,8 +5,9 @@
 - name: POSTFIX | Verify default listener and local outbound bounce
   become: true
   become_user: root
-  ansible.builtin.command:
-    cmd: python3 /etc/postfix-test/operating_modes.py bounce
+  ansible.builtin.script:
+    executable: python3
+    cmd: ../tests/operating_modes.py bounce
   changed_when: false
 
 - name: POSTFIX | Read native indexed map format for the recovery fixture
@@ -14,12 +15,43 @@
     argv: [postconf, -h, default_database_type]
   changed_when: false
   register: __postfix_recovery_type
+  failed_when: __postfix_recovery_type.rc != 0
 
 - name: POSTFIX | Record master identity before changing only indexed data
   ansible.builtin.command:
     argv: [cat, /var/spool/postfix/pid/master.pid]
   changed_when: false
   register: __postfix_original_master
+  failed_when: __postfix_original_master.rc != 0
+
+- name: POSTFIX | Record the installed main.cf before validation
+  ansible.builtin.stat:
+    path: /etc/postfix/main.cf
+  register: __postfix_installed_main
+
+- name: POSTFIX | Require native validation of the proposed main.cf
+  block:
+    - name: POSTFIX | Apply an invalid numerical setting
+      ansible.builtin.include_role:
+        name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+      vars:
+        postfix_main_cf: {default_process_limit: 1oo}
+
+    - name: POSTFIX | Flag unexpected acceptance of the invalid main.cf
+      ansible.builtin.fail:
+        msg: Postfix accepted an invalid default_process_limit.
+
+  rescue:
+    - name: POSTFIX | Verify the native validator rejected the setting
+      ansible.builtin.assert:
+        that: "'bad numerical configuration: default_process_limit' in ansible_failed_result.stderr"
+        quiet: true
+
+- name: POSTFIX | Verify the rejected template preserved the installed main.cf
+  ansible.builtin.stat:
+    path: /etc/postfix/main.cf
+  register: __postfix_after_validation
+  failed_when: __postfix_after_validation.stat.checksum != __postfix_installed_main.stat.checksum
 
 - name: POSTFIX | Remove an unchanged credential index as after an interrupted run
   become: true
@@ -47,63 +79,8 @@
 - name: POSTFIX | Verify the alias and recovered native indexes
   become: true
   become_user: root
-  ansible.builtin.command:
+  ansible.builtin.script:
+    executable: python3
     cmd: >-
-      python3 /etc/postfix-test/operating_modes.py recovery --pid {{ __postfix_original_master.stdout | trim }} --map-type {{ __postfix_recovery_type.stdout }}
+      ../tests/operating_modes.py recovery --pid {{ __postfix_original_master.stdout | trim }} --map-type {{ __postfix_recovery_type.stdout }}
   changed_when: false
-
-- name: POSTFIX | Stage the desired master entry without signalling the daemon
-  become: true
-  become_user: root
-  ansible.builtin.lineinfile:
-    path: /etc/postfix/master.cf
-    line: '127.0.0.1:1589 inet n - n - - smtpd'
-
-- name: POSTFIX | Confirm the staged listener is still inactive
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: 1589
-    state: stopped
-    timeout: 5
-
-- name: POSTFIX | Record the staged pair before reconciliation
-  ansible.builtin.command:
-    argv: [sha256sum, /etc/postfix/main.cf, /etc/postfix/master.cf]
-  changed_when: false
-  register: __postfix_staged_pair
-
-- name: POSTFIX | Activate the staged listener without any further configuration file edits
-  ansible.builtin.include_role:
-    name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
-  vars:
-    postfix_master_cf:
-      - {name: '127.0.0.1:1589', type: inet, private: 'n', command: smtpd}
-    postfix_local_aliases: {postmaster: root, monitoring: root}
-
-- name: POSTFIX | Reject invalid inputs while the previously activated SMTP listener serves mail
-  ansible.builtin.include_tasks: invalid_config.yml
-  loop:
-    - main: {default_process_limit: 1oo}
-      listeners: {}
-      expected: 'bad numerical configuration: default_process_limit'
-    - main: {}
-      listeners:
-        mx: {port: 1589, address: 127.0.0.1, auth: none, tls: none, relay: none, recipient_restrictions: [reject_unverifed_recipient]}
-      expected: "unknown SMTP restriction 'reject_unverifed_recipient'"
-  loop_control:
-    loop_var: __postfix_invalid
-    label: "{{ __postfix_invalid.expected }}"
-
-- name: POSTFIX | Verify that both files still match the staged pair byte for byte
-  ansible.builtin.command:
-    argv: [sha256sum, /etc/postfix/main.cf, /etc/postfix/master.cf]
-  register: __postfix_serving_pair
-  changed_when: false
-  failed_when: __postfix_serving_pair.rc != 0 or __postfix_serving_pair.stdout != __postfix_staged_pair.stdout
-
-- name: POSTFIX | Verify the running master serves the recovered listener
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: 1589
-    search_regex: '^220 '
-    timeout: 10

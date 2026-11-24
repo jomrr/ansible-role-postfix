@@ -1,0 +1,10 @@
+---
+# role: postfix
+# file: vars/Linux.yml
+
+# Validate the proposed file with its installed companion. Pass paths as shell arguments.
+__postfix_validate_config: >-
+  sh -c 'd=$(mktemp -d) || exit 1;
+  cp "$1" "$d/$2" && cp "/etc/postfix/$3" "$d/$3" && postfix -c "$d" check;
+  rc=$?; rm -rf "$d"; exit "$rc"' sh "%s"
+__postfix_validate_logrotate: logrotate -d -s /dev/null %s

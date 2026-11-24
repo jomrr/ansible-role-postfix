@@ -1,0 +1,6 @@
+---
+# role: postfix
+# file: vars/Fedora.yml
+
+__postfix_table_type: hash
+__postfix_cache_type: btree

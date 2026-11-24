@@ -9,3 +9,6 @@ __postfix_backend_packages:
   pgsql: [postfix-pgsql]
 __postfix_ca_file: /etc/pki/tls/certs/ca-bundle.crt
 __postfix_setgid_group: postdrop
+
+__postfix_table_type: lmdb
+__postfix_cache_type: lmdb

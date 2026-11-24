@@ -4,8 +4,8 @@
 
 # Identity and network bindings
 
-# Fully qualified hostname announced by the mail server.
-postfix_hostname: "{{ ansible_facts.fqdn | default(inventory_hostname) }}"
+# Fully qualified hostname announced by the mail server. Defaults to the host FQDN.
+# postfix_hostname: mail.example.org
 
 # Domain appended to locally submitted unqualified addresses.
 postfix_origin: $myhostname

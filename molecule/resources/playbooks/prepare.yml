@@ -6,11 +6,13 @@
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: POSTFIX | Exercise policy validation, lookup routing and interrupted workspaces
+    - name: POSTFIX | Exercise listener and lookup routing
       ansible.builtin.command:
         argv: ["{{ ansible_playbook_python }}", -m, unittest, discover, -s, tests/unit]
         chdir: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+      register: __postfix_unit_tests
       changed_when: false
+      failed_when: __postfix_unit_tests.rc != 0
 
 - name: POSTFIX | Prepare the shared AD directory
   hosts: postfix_directory
@@ -78,16 +80,13 @@
       loop_control:
         loop_var: __postfix_directory
 
-    - name: POSTFIX | Install shared delivery probes on the test server
+    - name: POSTFIX | Install the shared SMTP client helper
       become: true
       become_user: root
       ansible.builtin.copy:
-        src: "../tests/{{ __postfix_probe }}"
-        dest: "/etc/postfix-test/{{ __postfix_probe }}"
+        src: ../tests/smtp_client.py
+        dest: /etc/postfix-test/smtp_client.py
         mode: '0644'
-      loop: [smtp_client.py, smtp_checks.py, operating_modes.py]
-      loop_control:
-        loop_var: __postfix_probe
 
     - name: POSTFIX | Trust the directory fixture CA for LDAP lookups
       become: true
@@ -104,6 +103,9 @@
         argv: [openssl, req, -x509, -newkey, 'rsa:2048', -nodes, -days, '2', -subj, /CN=localhost,
                -addext, 'subjectAltName=DNS:localhost', -keyout, /etc/postfix-test/server.key, -out, /etc/postfix-test/server.crt]
         creates: /etc/postfix-test/server.crt
+      register: __postfix_certificate
+      changed_when: __postfix_certificate.changed
+      failed_when: __postfix_certificate.rc != 0
 
 - name: POSTFIX | Prepare PostfixAdmin in the official database containers
   hosts: postfix_mysql:postfix_pgsql

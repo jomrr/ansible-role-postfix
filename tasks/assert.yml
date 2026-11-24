@@ -2,7 +2,7 @@
 # role: postfix
 # file: tasks/assert.yml
 
-- name: POSTFIX | Validate network, TLS, address classes and delivery policy
+- name: assert | Validate network, TLS, address classes and delivery policy
   ansible.builtin.assert:
     that:
       - (__postfix_listeners | length) == (postfix_listeners | length)
@@ -30,7 +30,7 @@
       - postfix_outbound != 'none' or not (postfix_main_cf.keys() | intersect(__postfix_outbound_parameters))
     quiet: true
 
-- name: POSTFIX | Validate relay destination and protected credentials
+- name: assert | Validate relay destination and protected credentials
   ansible.builtin.assert:
     that:
       - postfix_relayhost.host is match('^[a-zA-Z0-9][a-zA-Z0-9.:-]*\Z')
@@ -43,7 +43,7 @@
   when: postfix_outbound == 'relayhost'
   no_log: true
 
-- name: POSTFIX | Validate additional master services
+- name: assert | Validate additional master services
   ansible.builtin.assert:
     that:
       - __postfix_service.name is match('^[A-Za-z0-9_.:\[\]-]+\Z')
@@ -59,13 +59,13 @@
     loop_var: __postfix_service
     label: "{{ __postfix_service.name }}"
 
-- name: POSTFIX | Validate LDAP alias and distribution lookup contracts
+- name: assert | Validate LDAP alias and distribution lookup contracts
   ansible.builtin.assert:
     that:
       - __postfix_query.key is match('^[a-z][a-z0-9_]*\Z')
       - __postfix_query.value is mapping
       - __postfix_query.value.keys() | difference(['filter','result_attribute','special_result_attribute','leaf_result_attribute']) | length == 0
-      - __postfix_query.value['filter'] is match('^\([^\r\n\x00]+\)\Z') and '%s' in __postfix_query.value['filter']
+      - __postfix_query.value.filter is match('^\([^\r\n\x00]+\)\Z') and '%s' in __postfix_query.value.filter
       - __postfix_query.value.get('result_attribute', '') | length > 0 or __postfix_query.value.get('leaf_result_attribute', '') | length > 0
       - __postfix_query.value.get('result_attribute', '') == '' or __postfix_query.value.result_attribute is match('^[a-zA-Z][a-zA-Z0-9-]*\Z')
       - __postfix_query.value.get('special_result_attribute','member') is match('^[a-zA-Z][a-zA-Z0-9-]*\Z')
@@ -76,14 +76,14 @@
     loop_var: __postfix_query
     label: "{{ __postfix_query.key }}"
 
-- name: POSTFIX | Validate single-line configuration values
+- name: assert | Validate single-line configuration values
   ansible.builtin.assert:
     that:
       - __postfix_value | length > 0
       - __postfix_value is not regex('[\s\x00]')
     quiet: true
   loop: >-
-    {{ [postfix_hostname, postfix_origin, postfix_dovecot_auth_socket, postfix_dovecot_lmtp_transport,
+    {{ [__postfix_hostname, postfix_origin, postfix_dovecot_auth_socket, postfix_dovecot_lmtp_transport,
         postfix_cyrus_sasl_path, postfix_relay_transport, postfix_smtp_helo_name]
        + postfix_interfaces + postfix_local_domains + postfix_virtual_mailbox_domains + postfix_virtual_alias_domains
        + postfix_relay_domains + postfix_ldap_address_domains + postfix_trusted_networks
@@ -92,7 +92,7 @@
     loop_var: __postfix_value
     label: "{{ __postfix_value }}"
 
-- name: POSTFIX | Validate managed log and certificate paths
+- name: assert | Validate managed log and certificate paths
   ansible.builtin.assert:
     that:
       - __postfix_path == '' or __postfix_path is match('^/[^\s]+$')
@@ -102,7 +102,7 @@
     loop_var: __postfix_path
     label: "{{ __postfix_path }}"
 
-- name: POSTFIX | Validate queue durations
+- name: assert | Validate queue durations
   ansible.builtin.assert:
     that:
       - __postfix_duration is match('^[1-9][0-9]*[smhdw]$')
@@ -114,7 +114,7 @@
     loop_var: __postfix_duration
     label: "{{ __postfix_duration }}"
 
-- name: POSTFIX | Validate provider references and unique transport names
+- name: assert | Validate provider references and unique transport names
   ansible.builtin.assert:
     that:
       - postfix_providers | map(attribute='name') | unique | length == postfix_providers | length
@@ -122,7 +122,7 @@
       - postfix_sender_relays.values() | difference(postfix_providers | map(attribute='name')) | length == 0
     quiet: true
 
-- name: POSTFIX | Validate provider names
+- name: assert | Validate provider names
   ansible.builtin.assert:
     that:
       - __postfix_name is match('^[a-z][a-z0-9_]*$')
@@ -132,7 +132,7 @@
     loop_var: __postfix_name
     label: "{{ __postfix_name }}"
 
-- name: POSTFIX | Validate provider hostnames
+- name: assert | Validate provider hostnames
   ansible.builtin.assert:
     that:
       - __postfix_host is match('^[a-zA-Z0-9][a-zA-Z0-9.-]*$')
@@ -142,7 +142,7 @@
     loop_var: __postfix_host
     label: "{{ __postfix_host }}"
 
-- name: POSTFIX | Validate optional provider ports
+- name: assert | Validate optional provider ports
   ansible.builtin.assert:
     that:
       - __postfix_port > 0 and __postfix_port < 65536
@@ -152,7 +152,7 @@
     loop_var: __postfix_port
     label: "{{ __postfix_port }}"
 
-- name: POSTFIX | Validate provider credential encoding
+- name: assert | Validate provider credential encoding
   ansible.builtin.assert:
     that:
       - __postfix_credential | length > 0
@@ -163,7 +163,7 @@
     loop_var: __postfix_credential
   no_log: true
 
-- name: POSTFIX | Validate provider login separators
+- name: assert | Validate provider login separators
   ansible.builtin.assert:
     that:
       - "':' not in __postfix_username"
@@ -173,7 +173,7 @@
     loop_var: __postfix_username
     label: "{{ __postfix_username }}"
 
-- name: POSTFIX | Validate LDAP endpoints and lookup parameters
+- name: assert | Validate LDAP endpoints and lookup parameters
   ansible.builtin.assert:
     that:
       - postfix_ldap.uris | length > 0
@@ -187,7 +187,7 @@
     quiet: true
   when: postfix_ldap_enabled
 
-- name: POSTFIX | Validate LDAP bind password for a single-line map setting
+- name: assert | Validate LDAP bind password for a single-line map setting
   ansible.builtin.assert:
     that:
       - postfix_ldap.bind_password | length > 0
@@ -197,7 +197,7 @@
   when: postfix_ldap_enabled
   no_log: true
 
-- name: POSTFIX | Validate explicit submission login keys
+- name: assert | Validate explicit submission login keys
   ansible.builtin.assert:
     that:
       - __postfix_login is match('^(?!#)[^\s,\x00]+\Z')
@@ -207,7 +207,7 @@
     loop_var: __postfix_login
     label: "{{ __postfix_login }}"
 
-- name: POSTFIX | Validate SQL query override names
+- name: assert | Validate SQL query override names
   ansible.builtin.assert:
     that:
       - postfix_database_queries.keys() | difference(__postfix_database_queries.keys()) | length == 0
@@ -215,7 +215,7 @@
     quiet: true
   when: postfix_account_backend != 'files'
 
-- name: POSTFIX | Validate SQL parameter syntax
+- name: assert | Validate SQL parameter syntax
   ansible.builtin.assert:
     that:
       - "'hosts' in postfix_database"
@@ -226,7 +226,7 @@
   no_log: true
   when: postfix_account_backend != 'files'
 
-- name: POSTFIX | Validate recipient and sender addresses
+- name: assert | Validate recipient and sender addresses
   ansible.builtin.assert:
     that:
       - __postfix_address is match('^[^\s@,=:]+@[^\s@,=:]+$')
@@ -236,7 +236,7 @@
     loop_var: __postfix_address
     label: "{{ __postfix_address }}"
 
-- name: POSTFIX | Validate multi-value address and identity tables
+- name: assert | Validate multi-value address and identity tables
   ansible.builtin.assert:
     that:
       - __postfix_entry.key is not regex('[\s:=]')
@@ -249,7 +249,7 @@
     loop_var: __postfix_entry
     label: "{{ __postfix_entry.key }}"
 
-- name: POSTFIX | Validate single-value routing, TLS policy and archive tables
+- name: assert | Validate single-value routing, TLS policy and archive tables
   ansible.builtin.assert:
     that:
       - __postfix_entry.key is not regex('[\s=]')

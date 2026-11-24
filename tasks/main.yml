@@ -2,42 +2,34 @@
 # role: postfix
 # file: tasks/main.yml
 
-- name: POSTFIX | Gather missing facts for the hostname, packages and service
-  ansible.builtin.setup:
-    gather_subset: ['!all', '!min', platform, distribution, pkg_mgr, service_mgr]
-  when: "['fqdn', 'os_family', 'pkg_mgr', 'service_mgr'] | difference(ansible_facts) | length > 0"
+- name: Gather facts and load platform settings
+  ansible.builtin.import_tasks: set_vars.yml
 
-- name: POSTFIX | Load platform settings
-  ansible.builtin.include_vars: "{{ lookup('ansible.builtin.first_found', __postfix_platform_files) }}"
-  vars:
-    __postfix_platform_files:
-      files:
-        - "{{ ansible_facts.os_family }}.yml"
-      paths:
-        - "{{ role_path }}/vars"
-
-- name: POSTFIX | Validate mail service inputs
+- name: Validate mail service inputs
   ansible.builtin.import_tasks: assert.yml
 
-- name: POSTFIX | Install mail service and lookup drivers
-  become: true
-  become_user: root
-  ansible.builtin.package:
-    name: "{{ __postfix_packages }}"
-    state: present
-    policy_rc_d: "{{ __postfix_policy_rc_d | default(omit) }}"
+- name: Configure Postfix
+  block:
+    - name: Install Postfix and lookup drivers
+      ansible.builtin.import_tasks: install.yml
 
-- name: POSTFIX | Discover installed package capabilities
-  ansible.builtin.import_tasks: capabilities.yml
+    - name: Configure mail services and logging
+      ansible.builtin.import_tasks: config.yml
 
-- name: POSTFIX | Validate configuration and configure logging
-  ansible.builtin.import_tasks: config.yml
+    - name: Install tables and build native indexes
+      ansible.builtin.import_tasks: tables.yml
 
-- name: POSTFIX | Converge lookup sources and inspect native indexes
-  ansible.builtin.import_tasks: tables.yml
+    - name: Configure SQL and LDAP connections
+      ansible.builtin.import_tasks: lookups.yml
 
-- name: POSTFIX | Configure SQL and LDAP connections
-  ansible.builtin.import_tasks: lookups.yml
+    - name: Enable and start Postfix
+      become: true
+      become_user: root
+      ansible.builtin.service:
+        name: postfix
+        enabled: true
+        state: started
 
-- name: POSTFIX | Build indexes and activate the validated configuration
-  ansible.builtin.import_tasks: service.yml
+  always:
+    - name: Apply pending Postfix changes
+      ansible.builtin.meta: flush_handlers

@@ -1,7 +1,7 @@
-{% filter postfix_unique_services %}
-{{ ansible_managed | comment }}
-# file: /etc/postfix/master.cf
+{{ ansible_managed | comment(prefix_count=0, postfix_count=0) }}
+# file: {{ template_destpath }}
 
+{% filter postfix_unique_services %}
 {% for service in __postfix_listeners %}
 {% if service.postscreen %}
 {{ service.bind }} inet n - n - 1 postscreen

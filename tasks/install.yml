@@ -1,0 +1,11 @@
+---
+# role: postfix
+# file: tasks/install.yml
+
+- name: install | Install Postfix and lookup drivers
+  become: true
+  become_user: root
+  ansible.builtin.package:
+    name: "{{ __postfix_packages }}"
+    state: present
+    policy_rc_d: "{{ __postfix_policy_rc_d | default(omit) }}"

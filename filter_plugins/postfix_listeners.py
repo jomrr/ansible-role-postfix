@@ -299,7 +299,7 @@ class FilterModule:
                 options["mynetworks"] = ", ".join(
                     network_text(n) for n in spec["clients"]
                 )
-            for key in LIMITS & spec.keys():
+            for key in sorted(LIMITS & spec.keys()):
                 options["smtpd_" + key] = str(spec[key])
             policy = restrictions(spec, outbound)
             for key in policy:

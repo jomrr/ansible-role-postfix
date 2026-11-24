@@ -2,27 +2,33 @@
 # role: postfix
 # file: tasks/config.yml
 
-- name: POSTFIX | Capture exactly the configuration pair to validate and publish
-  ansible.builtin.set_fact:
-    __postfix_configuration:
-      main.cf: "{{ lookup('ansible.builtin.template', 'main.cf.j2') }}"
-      master.cf: "{{ lookup('ansible.builtin.template', 'master.cf.j2') }}"
-  no_log: true
-
-- name: POSTFIX | Validate the native candidate before changing live resources
+- name: config | Install main.cf
   become: true
   become_user: root
-  postfix_activate:
-    operation: validate
-    configuration: "{{ __postfix_configuration }}"
-  register: __postfix_validation
+  ansible.builtin.template:
+    src: main.cf.j2
+    dest: /etc/postfix/main.cf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: "{{ postfix_backup }}"
+    validate: "{{ __postfix_validate_config }} main.cf master.cf"
+  notify: restart postfix
 
-- name: POSTFIX | Validate the effective SMTP restrictions for each service
-  ansible.builtin.assert:
-    that: __postfix_validation.policies | postfix_valid_restrictions(__postfix_package.version is version('3.9', '<'))
-    quiet: true
+- name: config | Install master.cf
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: master.cf.j2
+    dest: /etc/postfix/master.cf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: "{{ postfix_backup }}"
+    validate: "{{ __postfix_validate_config }} master.cf main.cf"
+  notify: restart postfix
 
-- name: POSTFIX | Protect the mail log without changing its contents
+- name: config | Protect the mail log without changing its contents
   become: true
   become_user: root
   ansible.builtin.file:
@@ -35,7 +41,7 @@
     modification_time: preserve
   when: postfix_log_file | length > 0
 
-- name: POSTFIX | Configure mail log rotation
+- name: config | Configure mail log rotation
   become: true
   become_user: root
   ansible.builtin.template:
@@ -45,9 +51,10 @@
     group: root
     mode: '0644'
     backup: "{{ postfix_backup }}"
+    validate: "{{ __postfix_validate_logrotate }}"
   when: postfix_log_file | length > 0
 
-- name: POSTFIX | Remove direct log rotation when logging to syslog
+- name: config | Remove direct log rotation when logging to syslog
   become: true
   become_user: root
   ansible.builtin.file:

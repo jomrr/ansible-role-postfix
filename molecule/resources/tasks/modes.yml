@@ -58,15 +58,7 @@
       register: __postfix_master_before_acl
       changed_when: false
 
-    - name: POSTFIX | Stage the new text ACL as after an interruption before reload
-      become: true
-      become_user: root
-      ansible.builtin.lineinfile:
-        path: /etc/postfix/managed/custom-screen_acl
-        regexp: '^127\.0\.0\.2/32 '
-        line: '127.0.0.2/32 reject'
-
-    - name: POSTFIX | Activate the staged text ACL
+    - name: POSTFIX | Change the CIDR table through the role
       ansible.builtin.include_role:
         name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
       vars:
@@ -83,22 +75,25 @@
 - name: POSTFIX | Exercise public reception and LDAP mailbox delivery
   become: true
   become_user: root
-  ansible.builtin.command:
-    argv: [python3, /etc/postfix-test/smtp_checks.py, --trusted-reception, "{{ groups['postfix_directory'][0] }}"]
+  ansible.builtin.script:
+    executable: python3
+    cmd: ../tests/smtp_checks.py --trusted-reception {{ groups['postfix_directory'][0] | quote }}
   changed_when: false
 
 - name: POSTFIX | Exercise source-restricted relay, gateway and custom table
   become: true
   become_user: root
-  ansible.builtin.command:
-    argv: [python3, /etc/postfix-test/operating_modes.py, gateway, --domain, "{{ groups['postfix_directory'][0] }}"]
+  ansible.builtin.script:
+    executable: python3
+    cmd: ../tests/operating_modes.py gateway --domain {{ groups['postfix_directory'][0] | quote }}
   changed_when: false
 
 - name: POSTFIX | Exercise Sieve local sendmail return path
   become: true
   become_user: root
-  ansible.builtin.command:
-    cmd: python3 /etc/postfix-test/operating_modes.py vacation --user alice
+  ansible.builtin.script:
+    executable: python3
+    cmd: ../tests/operating_modes.py vacation --user alice
   changed_when: false
 
 - name: POSTFIX | Point the real Dovecot test service at the internal SMTP listener
@@ -121,8 +116,9 @@
 - name: POSTFIX | Exercise Sieve SMTP return path from the trusted service
   become: true
   become_user: root
-  ansible.builtin.command:
-    cmd: python3 /etc/postfix-test/operating_modes.py vacation --user archive
+  ansible.builtin.script:
+    executable: python3
+    cmd: ../tests/operating_modes.py vacation --user archive
   changed_when: false
 
 - name: POSTFIX | Configure a local-only authenticated mail hub
@@ -138,6 +134,33 @@
 - name: POSTFIX | Verify restricted authenticated submission and listener isolation
   become: true
   become_user: root
-  ansible.builtin.command:
-    cmd: python3 /etc/postfix-test/operating_modes.py hub
+  ansible.builtin.script:
+    executable: python3
+    cmd: ../tests/operating_modes.py hub
   changed_when: false
+
+- name: POSTFIX | Exercise handler dispatch after a later configuration error
+  block:
+    - name: POSTFIX | Change the SMTP banner and request a duplicate master service
+      ansible.builtin.include_role:
+        name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+      vars:
+        postfix_main_cf: {smtpd_banner: '$myhostname ESMTP molecule-flush'}
+        postfix_master_cf: [{name: pickup, type: unix, command: pickup}]
+
+    - name: POSTFIX | Flag unexpected acceptance of a duplicate master service
+      ansible.builtin.fail:
+        msg: Postfix accepted a duplicate pickup service.
+
+  rescue:
+    - name: POSTFIX | Verify the failure occurred while rendering master.cf
+      ansible.builtin.assert:
+        that: "'Duplicate master.cf service pickup/unix' in ansible_failed_result.msg"
+        quiet: true
+
+    - name: POSTFIX | Verify the running listener already serves the new banner
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 1588
+        search_regex: '^220 .*ESMTP molecule-flush'
+        timeout: 10

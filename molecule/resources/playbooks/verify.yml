@@ -5,10 +5,13 @@
 - name: POSTFIX | Verify return to a closed default installation
   hosts: postfix_servers
   gather_facts: false
+  environment:
+    PYTHONPATH: /etc/postfix-test
   tasks:
     - name: POSTFIX | Verify the running service and closed network policy
       become: true
       become_user: root
-      ansible.builtin.command:
-        argv: [python3, /etc/postfix-test/operating_modes.py, closed]
+      ansible.builtin.script:
+        cmd: ../tests/operating_modes.py closed
+        executable: python3
       changed_when: false

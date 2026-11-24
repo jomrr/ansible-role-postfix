@@ -1,0 +1,19 @@
+---
+# role: postfix
+# file: handlers/main.yml
+
+- name: POSTFIX | Restart Postfix
+  become: true
+  become_user: root
+  ansible.builtin.service:
+    name: postfix
+    state: restarted
+  listen: restart postfix
+
+- name: POSTFIX | Reload Postfix
+  become: true
+  become_user: root
+  ansible.builtin.service:
+    name: postfix
+    state: reloaded
+  listen: reload postfix

@@ -9,8 +9,8 @@ argument_specs:
     options:
       postfix_hostname:
         type: str
-        default: '{{ ansible_facts.fqdn | default(inventory_hostname) }}'
-        description: Fully qualified hostname announced by the mail server.
+        description: Fully qualified hostname announced by the mail server. Defaults to
+          the host FQDN.
       postfix_origin:
         type: str
         default: $myhostname

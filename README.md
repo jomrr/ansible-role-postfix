@@ -45,8 +45,7 @@ routes. Select a starting point from the operating modes below.
 
 - Postfix 3.6 or later. Network listeners require a build with
   smtpd_forbid_unauth_pipelining. The normalize and reject newline policies also
-  require their corresponding security update. Vendor backports are detected by
-  capability.
+  require a package with the corresponding security update.
 - For authenticated listeners, provide a PEM chain and key and either a Dovecot
   auth socket or a working Cyrus SASL application configuration.
 - For virtual delivery, the LMTP backend must recognize the same recipients.
@@ -68,13 +67,8 @@ collections:
 
 Type: `str`. Required: `false`.
 
-Fully qualified hostname announced by the mail server.
-
-Default:
-
-```yaml
-postfix_hostname: '{{ ansible_facts.fqdn | default(inventory_hostname) }}'
-```
+Fully qualified hostname announced by the mail server. Defaults to the host
+FQDN.
 
 ### `postfix_origin`
 
@@ -1051,44 +1045,41 @@ postfix_logrotate_count: 14
   per-listener restriction lists.
 - `/etc/postfix/master.cf` SMTP listeners, delivery transports and optional
   postscreen or additional native services.
-- `/etc/postfix/managed/` Address tables, native indexes, protected connection
-  settings and a root-only record of the last activated configuration.
+- `/etc/postfix/managed/` Address tables, native indexes and protected SQL, LDAP
+  and relay connection settings.
 - `/etc/logrotate.d/ansible-postfix` Installed when direct file logging is
   enabled and removed when switching to system logging.
 
 ## Check Mode
 
-An installed Postfix package permits check mode without writing maps or changing
-the service.
-
-- A first check-only run requires installed Postfix tools to read package
-  capabilities and native defaults.
+A check-mode run on a converged host reports zero changes.
 
 ## Service Behavior
 
-The role gathers missing hostname, distribution, package manager and service
-manager facts, including in plays that use `gather_facts: false`. It installs
-Postfix, builds missing or outdated indexes with `postmap` or `postalias`,
-and enables the service.
+The role gathers the facts it needs, including in plays with
+`gather_facts: false`. It installs Postfix and the selected lookup
+drivers and enables the service.
 
-Before replacing `main.cf` and `master.cf`, the role validates them together
-in a private directory. A rejected candidate leaves the active configuration
-in place. A corrected inventory can replace an invalid installed pair. Each
-native operation holds a host lock and removes abandoned candidates.
+Before replacing `main.cf` or `master.cf`, the template validates the
+proposed file together with its installed companion using `postfix check`.
+When validation fails, the destination keeps its previous contents.
+Correct the inventory and run the role again.
 
-Changes to TCP listeners, interface bindings, protocols or the list of
-disabled services require a restart. Other configuration changes trigger a
-reload, including updates to SQL or LDAP connections and to `cidr`, `regexp`,
-`pcre` or `texthash` tables. The role records a successful activation before
-retiring superseded lookups. It retries an interrupted activation on the
-next run.
+The role is idempotent. With identical inputs and intact indexes, a
+second run reports zero changes. Changed, missing or stale indexes are
+rebuilt with `postmap` or `postalias`.
 
-If publication, startup, reload or the subsequent status check fails, the
-role restores each file it replaced in the configuration pair. It removes
-either file if the failed attempt created it. After restoring files, it
-attempts to restart the previous configuration if Postfix was running before
-replacement or the old pair matched the last recorded activation. Ansible
-reports the failure. This rollback also runs with `postfix_backup: false`.
+Pending handlers run at the end of configuration, including after an
+ordinary task failure. A hard interruption can lose a pending restart or
+reload. In that case, apply the pending service action manually. If a
+restart fails, correct the setting or restore the adjacent timestamped
+backup made with `postfix_backup: true`, then start Postfix.
+
+### Handlers
+
+- A change to main.cf or master.cf restarts Postfix.
+- A change to a text lookup table or a SQL or LDAP connection file reloads
+  Postfix.
 
 ## Security Notes
 
@@ -1117,12 +1108,6 @@ reports the failure. This rollback also runs with `postfix_backup: false`.
   policy_services. Set mx for inbound checks and postscreen for pre-greeting
   screening. Set helo_restrictions, sender_restrictions, recipient_restrictions
   or native options on the individual listener.
-- The role checks restriction names after Postfix expands parameters and service
-  overrides. Use a native restriction, a lookup table or a class declared in
-  smtpd_restriction_classes. A misspelled name reports the service and parameter
-  before the running configuration changes. On Postfix 3.9 and later, the same
-  check rejects check_relay_domains, permit_naked_ip_address and
-  reject_maps_rbl, which the daemon no longer implements.
 - The SMTP server enforces command synchronization. The anvil defaults are 30
   AUTH attempts and 60 new connections per client and service in each
   anvil_rate_time_unit (normally 60 seconds). Account for shared client IPs when
@@ -1134,11 +1119,11 @@ reports the failure. This rollback also runs with `postfix_backup: false`.
   rejects ETRN requests. Normal non-delivery reports still use the null envelope
   sender. For an authorized ETRN service, set both smtpd_discard_ehlo_keywords
   and smtpd_etrn_restrictions in its listener options.
-- Each screened listener has its own writable cache. The role selects an
-  installed LMDB, Btree or hash driver for postscreen and address verification.
-  Native postscreen_* listener options apply to the front end. For observation,
-  set postscreen_greet_action and postscreen_dnsbl_action to ignore. Configure
-  the actions for any additional tests you enable in the same options mapping.
+- Each screened listener has its own writable cache. The platform settings
+  select the cache driver for postscreen and address verification. Native
+  postscreen_* listener options apply to the front end. For observation, set
+  postscreen_greet_action and postscreen_dnsbl_action to ignore. Configure the
+  actions for any additional tests you enable in the same options mapping.
 - Closed outbound mode rejects foreign recipients even after SMTP AUTH and sends
   a permanent non-delivery notification for local submissions. Explicit
   transport routes and providers require an enabled outbound mode. Relay domains
@@ -1165,9 +1150,8 @@ reports the failure. This rollback also runs with `postfix_backup: false`.
   list in postfix_sender_logins.
 - postfix_tables accepts type (native, hash, btree, lmdb, cdb, cidr, regexp,
   pcre or texthash), entries, an optional parameter and an explicit secret flag.
-  Native indexes use the compiled default when its driver is installed, then a
-  supported local format. Pattern rules keep declaration order. Reference a
-  custom table as $managed_table_NAME.
+  Native indexes use the platform table type. Pattern rules keep declaration
+  order. Reference a custom table as $managed_table_NAME.
 - postfix_main_cf accepts native single-line parameters. postfix_master_cf adds
   named service definitions with type, command and optional overrides. Treat
   these interfaces as privileged configuration. Use listener fields for
