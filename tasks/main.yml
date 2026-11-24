@@ -2,6 +2,11 @@
 # role: postfix
 # file: tasks/main.yml
 
+- name: POSTFIX | Gather missing facts for the hostname, packages and service
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', platform, distribution, pkg_mgr, service_mgr]
+  when: "['fqdn', 'os_family', 'pkg_mgr', 'service_mgr'] | difference(ansible_facts) | length > 0"
+
 - name: POSTFIX | Load platform settings
   ansible.builtin.include_vars: "{{ lookup('ansible.builtin.first_found', __postfix_platform_files) }}"
   vars:
@@ -18,10 +23,9 @@
   become: true
   become_user: root
   ansible.builtin.package:
-    name: "{{ __postfix_packages + __postfix_backend_packages[postfix_account_backend] + (['postfix-ldap'] if postfix_ldap_enabled else [])
-             + (__postfix_pcre_packages if postfix_tables.values() | selectattr('type', 'defined') | selectattr('type', 'equalto', 'pcre') | length else []) }}"
+    name: "{{ __postfix_packages }}"
     state: present
-    policy_rc_d: "{{ 101 if ansible_facts.pkg_mgr == 'apt' else omit }}"
+    policy_rc_d: "{{ __postfix_policy_rc_d | default(omit) }}"
 
 - name: POSTFIX | Discover installed package capabilities
   ansible.builtin.import_tasks: capabilities.yml

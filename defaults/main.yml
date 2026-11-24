@@ -5,7 +5,7 @@
 # Identity and network bindings
 
 # Fully qualified hostname announced by the mail server.
-postfix_hostname: "{{ ansible_facts.fqdn }}"
+postfix_hostname: "{{ ansible_facts.fqdn | default(inventory_hostname) }}"
 
 # Domain appended to locally submitted unqualified addresses.
 postfix_origin: $myhostname
@@ -272,8 +272,8 @@ postfix_logrotate_interval: daily
 # Number of rotated Postfix log files to retain.
 postfix_logrotate_count: 14
 
-# Preserve previous nonsecret configuration files when they change.
-postfix_backup: false
+# Back up main.cf, master.cf, log rotation and nonsecret built-in tables before replacing them.
+postfix_backup: true
 
 # Native configuration and lookup tables
 

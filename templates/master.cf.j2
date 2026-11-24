@@ -1,5 +1,5 @@
 {% filter postfix_unique_services %}
-# Managed by ansible.
+{{ ansible_managed | comment }}
 # file: /etc/postfix/master.cf
 
 {% for service in __postfix_listeners %}

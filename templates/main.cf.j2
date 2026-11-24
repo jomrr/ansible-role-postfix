@@ -1,5 +1,5 @@
 {% filter postfix_main_parameters(postfix_main_cf) %}
-# Managed by ansible.
+{{ ansible_managed | comment }}
 # file: /etc/postfix/main.cf
 
 {% include 'main/identity.j2' +%}

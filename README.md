@@ -73,7 +73,7 @@ Fully qualified hostname announced by the mail server.
 Default:
 
 ```yaml
-postfix_hostname: '{{ ansible_facts.fqdn }}'
+postfix_hostname: '{{ ansible_facts.fqdn | default(inventory_hostname) }}'
 ```
 
 ### `postfix_origin`
@@ -584,12 +584,13 @@ postfix_milter_default_action: tempfail
 
 Type: `bool`. Required: `false`.
 
-Preserve previous nonsecret configuration files when they change.
+Back up main.cf, master.cf, log rotation and nonsecret built-in tables before
+replacing them.
 
 Default:
 
 ```yaml
-postfix_backup: false
+postfix_backup: true
 ```
 
 ### `postfix_database`
@@ -1065,25 +1066,29 @@ the service.
 
 ## Service Behavior
 
-A normal run installs Postfix, repairs its tables, applies configuration and
-enables the service.
+The role gathers missing hostname, distribution, package manager and service
+manager facts, including in plays that use `gather_facts: false`. It installs
+Postfix, builds missing or outdated indexes with `postmap` or `postalias`,
+and enables the service.
 
-### Handlers
+Before replacing `main.cf` and `master.cf`, the role validates them together
+in a private directory. A rejected candidate leaves the active configuration
+in place. A corrected inventory can replace an invalid installed pair. Each
+native operation holds a host lock and removes abandoned candidates.
 
-- Missing, changed or older indexes are built with postmap or postalias during
-  convergence. Only the affected tables are rebuilt.
-- The role renders main.cf and master.cf together in a private directory and
-  runs native Postfix checks before installation. A rejected candidate leaves
-  the installed pair and running service in place. A corrected inventory can
-  also replace an invalid installed configuration.
-- Changes to the configuration pair, SQL or LDAP connections and cidr, regexp,
-  pcre or texthash sources trigger activation. The role records success after
-  the service action and retries an interrupted activation on the next run.
-  Changes to TCP listeners, interface bindings, protocols or the
-  disabled-service list use a restart so bind failures reach Ansible. Other
-  policy changes use a reload. Superseded lookups are retired after activation.
-- Each native operation owns its private candidate directory under a host lock.
-  The next operation removes abandoned candidates after an interruption.
+Changes to TCP listeners, interface bindings, protocols or the list of
+disabled services require a restart. Other configuration changes trigger a
+reload, including updates to SQL or LDAP connections and to `cidr`, `regexp`,
+`pcre` or `texthash` tables. The role records a successful activation before
+retiring superseded lookups. It retries an interrupted activation on the
+next run.
+
+If publication, startup, reload or the subsequent status check fails, the
+role restores each file it replaced in the configuration pair. It removes
+either file if the failed attempt created it. After restoring files, it
+attempts to restart the previous configuration if Postfix was running before
+replacement or the old pair matched the last recorded activation. Ansible
+reports the failure. This rollback also runs with `postfix_backup: false`.
 
 ## Security Notes
 

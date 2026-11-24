@@ -36,6 +36,8 @@ def closed() -> None:
     )
     assert command("postconf", "-h", "maillog_file") == ""
     assert not Path("/etc/logrotate.d/ansible-postfix").exists()
+    assert not any(MAPS.glob("sasl_passwd.*~"))
+    assert not any(MAPS.glob("*.cf.*~"))
     command("postfix", "status")
 
 
@@ -64,6 +66,11 @@ def bounce() -> None:
 def recovery(pid: str, map_type: str) -> None:
     """Verify recovered native maps without interrupting the master process."""
     assert command("cat", "/var/spool/postfix/pid/master.pid") == pid
+    assert command("postconf", "-h", "myhostname") == socket.getfqdn()
+    assert any(
+        "abuse: postmaster" in backup.read_text(encoding="utf-8").splitlines()
+        for backup in MAPS.glob("local_aliases.*~")
+    ), "The previous local aliases were not backed up"
     assert (
         command("postalias", "-q", "monitoring", f"{map_type}:{MAPS}/local_aliases")
         == "root"

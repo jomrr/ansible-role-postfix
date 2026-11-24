@@ -2,6 +2,12 @@
 # role: postfix
 # file: vars/main.yml
 
+__postfix_packages: >-
+  {{ __postfix_base_packages
+     + __postfix_backend_packages[postfix_account_backend]
+     + (['postfix-ldap'] if postfix_ldap_enabled else [])
+     + (['postfix-pcre'] if 'pcre' in postfix_tables.values() | map(attribute='type', default='native') else []) }}
+
 __postfix_dir: /etc/postfix/managed
 __postfix_listeners: >-
   {{ postfix_listeners | postfix_listener_services(postfix_outbound, postfix_main_cf.get('smtpd_discard_ehlo_keywords', '')) }}

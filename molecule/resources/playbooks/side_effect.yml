@@ -4,8 +4,11 @@
 
 - name: POSTFIX | Exercise the closed installation and repair interrupted updates
   hosts: postfix_servers
-  gather_facts: true
+  gather_facts: false
   tasks:
+    - name: POSTFIX | Start recovery with an empty fact cache
+      ansible.builtin.meta: clear_facts
+
     - name: POSTFIX | Exercise the default delivery and index lifecycle
       ansible.builtin.import_tasks: ../tasks/recovery.yml
 

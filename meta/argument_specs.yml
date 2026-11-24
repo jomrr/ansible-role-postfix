@@ -9,7 +9,7 @@ argument_specs:
     options:
       postfix_hostname:
         type: str
-        default: '{{ ansible_facts.fqdn }}'
+        default: '{{ ansible_facts.fqdn | default(inventory_hostname) }}'
         description: Fully qualified hostname announced by the mail server.
       postfix_origin:
         type: str
@@ -291,8 +291,9 @@ argument_specs:
           - accept
       postfix_backup:
         type: bool
-        default: false
-        description: Preserve previous nonsecret configuration files when they change.
+        default: true
+        description: Back up main.cf, master.cf, log rotation and nonsecret built-in tables
+          before replacing them.
       postfix_database:
         type: dict
         default: {}
