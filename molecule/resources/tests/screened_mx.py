@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Exercise two simultaneously running postscreen listeners and a text ACL update."""
 
-from pathlib import Path
 import smtplib
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 
 def connect(port: int) -> smtplib.SMTP:

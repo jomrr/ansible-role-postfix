@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from pathlib import PurePosixPath
-import re
 from typing import Any
 
 DIRECTORY = "/etc/postfix/managed"
@@ -96,7 +96,7 @@ def table_catalog(
             raise ValueError(f"Invalid table type or parameter for {name}")
         secret = item.get("secret", False)
         if not isinstance(secret, bool) or not isinstance(item.get("entries"), Mapping):
-            raise ValueError(
+            raise TypeError(
                 f"Table {name} needs a mapping of entries and a boolean secret flag"
             )
         if name in custom and set(item) & {"aliases", "mode"}:

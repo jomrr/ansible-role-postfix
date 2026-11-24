@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from ipaddress import IPv4Address, IPv6Address, ip_address, ip_network
-import re
 from typing import Any
 
 LISTS = {
@@ -47,7 +47,7 @@ def line(value: Any) -> bool:
 def clean_options(options: dict[str, Any]) -> dict[str, str]:
     """Validate explicit native parameters before writing either Postfix file."""
     if not isinstance(options, Mapping):
-        raise ValueError("Native options must be a mapping")
+        raise TypeError("Native options must be a mapping")
     result = {}
     for key, value in options.items():
         if (
@@ -118,7 +118,7 @@ def validate_listener(name: str, spec: dict[str, Any]) -> None:
             raise ValueError(f"Invalid {key} on {name}")
     for key in {"sender_login_match", "mx", "postscreen"} & spec.keys():
         if not isinstance(spec[key], bool):
-            raise ValueError(f"Invalid boolean {key} on {name}")
+            raise TypeError(f"Invalid boolean {key} on {name}")
     validate_policy(name, spec)
 
 

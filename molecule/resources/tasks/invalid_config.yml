@@ -1,0 +1,20 @@
+---
+# role: postfix
+# file: molecule/resources/tasks/invalid_config.yml
+
+- name: POSTFIX | Verify rejection before publication
+  block:
+    - name: POSTFIX | Apply the malformed candidate
+      ansible.builtin.include_role:
+        name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+      vars:
+        postfix_main_cf: "{{ __postfix_invalid.main }}"
+        postfix_listeners: "{{ __postfix_invalid.listeners }}"
+
+    - name: POSTFIX | Flag unexpected acceptance of the candidate
+      ansible.builtin.fail:
+        msg: The invalid Postfix candidate was accepted.
+  rescue:
+    - name: POSTFIX | Require the expected validation failure
+      ansible.builtin.assert:
+        that: __postfix_invalid.expected in ansible_failed_result.msg

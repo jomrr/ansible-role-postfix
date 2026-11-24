@@ -4,11 +4,7 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
-from email.utils import make_msgid
-from functools import partial
 import json
-from pathlib import Path
 import queue
 import smtplib
 import socket
@@ -17,6 +13,10 @@ import ssl
 import subprocess
 import threading
 import uuid
+from collections.abc import Callable
+from email.utils import make_msgid
+from functools import partial
+from pathlib import Path
 
 from smtp_client import in_mailbox, message, submission, wait_for
 

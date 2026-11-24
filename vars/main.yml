@@ -61,7 +61,7 @@ __postfix_builtin_tables:
     entries: "{{ dict(postfix_relay_recipients | zip_longest([], fillvalue='OK')) }}"
 
 __postfix_table_type: >-
-  {{ ([__postfix_native.stdout_lines[0], 'lmdb', 'cdb', 'hash', 'btree'] | select('in', __postfix_drivers.stdout_lines) | first) }}
+  {{ ([__postfix_package.default_map, 'lmdb', 'cdb', 'hash', 'btree'] | select('in', __postfix_package.drivers) | first) }}
 __postfix_tables: "{{ __postfix_builtin_tables | postfix_table_catalog(postfix_tables, __postfix_table_type) }}"
 __postfix_map_parameters: >-
   {{ __postfix_tables | postfix_map_parameters(postfix_account_backend, postfix_ldap_enabled, postfix_ldap_alias_queries, postfix_tls_policy_maps) }}
@@ -135,7 +135,7 @@ __postfix_database_queries:
     WHERE ad.alias_domain='%d' AND a.address=CONCAT('%u','@',ad.target_domain)
     AND a.active=TRUE AND ad.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
 
-__postfix_cache_type: "{{ ['lmdb', 'btree', 'hash'] | select('in', __postfix_drivers.stdout_lines) | first | default('') }}"
+__postfix_cache_type: "{{ ['lmdb', 'btree', 'hash'] | select('in', __postfix_package.drivers) | first | default('') }}"
 
 __postfix_outbound_parameters:
   - default_transport

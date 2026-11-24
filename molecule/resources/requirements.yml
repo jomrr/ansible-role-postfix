@@ -3,10 +3,10 @@
 # file: molecule/resources/requirements.yml
 
 roles:
-  - name: jomrr.postfix_test_dovecot
+  - name: jomrr.postfix_test_dovecot_24
     src: https://github.com/jomrr/ansible-role-dovecot.git
     scm: git
-    version: fe24f50948075da35cc73443661d9a592e741d22
+    version: dev
 collections:
   - name: community.general
     version: '>=12.0.0'

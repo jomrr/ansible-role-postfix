@@ -2,43 +2,25 @@
 # role: postfix
 # file: tasks/config.yml
 
-- name: POSTFIX | Render both candidate configuration files
-  become: true
-  become_user: root
-  ansible.builtin.template:
-    src: "{{ __postfix_config }}.j2"
-    dest: "{{ __postfix_stage.path }}/{{ __postfix_config }}"
-    owner: root
-    group: root
-    mode: '0644'
-    backup: false
-  loop: [main.cf, master.cf]
-  loop_control:
-    loop_var: __postfix_config
-    label: "{{ __postfix_config }}"
-  changed_when: false
-  check_mode: false
-  diff: false
+- name: POSTFIX | Capture exactly the configuration pair to validate and publish
+  ansible.builtin.set_fact:
+    __postfix_configuration:
+      main.cf: "{{ lookup('ansible.builtin.template', 'main.cf.j2') }}"
+      master.cf: "{{ lookup('ansible.builtin.template', 'master.cf.j2') }}"
+  no_log: true
 
-- name: POSTFIX | Check the candidate with the native Postfix package before changing live resources
+- name: POSTFIX | Validate the native candidate before changing live resources
   become: true
   become_user: root
-  ansible.builtin.command:
-    argv: [postfix, -c, "{{ __postfix_stage.path }}", check]
-  changed_when: false
-  when: not ansible_check_mode
+  postfix_activate:
+    operation: validate
+    configuration: "{{ __postfix_configuration }}"
+  register: __postfix_validation
 
-- name: POSTFIX | Parse native parameters and services without initializing spool files in check mode
-  become: true
-  become_user: root
-  ansible.builtin.command:
-    argv: [postconf, -c, "{{ __postfix_stage.path }}", "{{ __postfix_check }}"]
-  loop: [-m, -M]
-  loop_control:
-    loop_var: __postfix_check
-  changed_when: false
-  check_mode: false
-  when: ansible_check_mode
+- name: POSTFIX | Validate the effective SMTP restrictions for each service
+  ansible.builtin.assert:
+    that: __postfix_validation.policies | postfix_valid_restrictions(__postfix_package.version is version('3.9', '<'))
+    quiet: true
 
 - name: POSTFIX | Protect the mail log without changing its contents
   become: true

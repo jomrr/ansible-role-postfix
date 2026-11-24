@@ -173,7 +173,7 @@ postfix_dovecot_auth_socket: private/auth
 
 Type: `str`. Required: `false`.
 
-Certificate chain required by any listener enforcing authentication.
+PEM certificate chain for listeners that provide or require TLS.
 
 Default:
 
@@ -185,7 +185,7 @@ postfix_tls_certificate: ''
 
 Type: `str`. Required: `false`.
 
-Private key required by either submission service.
+PEM private key matching the certificate chain for TLS-enabled listeners.
 
 Default:
 
@@ -1082,6 +1082,8 @@ enables the service.
   Changes to TCP listeners, interface bindings, protocols or the
   disabled-service list use a restart so bind failures reach Ansible. Other
   policy changes use a reload. Superseded lookups are retired after activation.
+- Each native operation owns its private candidate directory under a host lock.
+  The next operation removes abandoned candidates after an interruption.
 
 ## Security Notes
 
@@ -1110,6 +1112,12 @@ enables the service.
   policy_services. Set mx for inbound checks and postscreen for pre-greeting
   screening. Set helo_restrictions, sender_restrictions, recipient_restrictions
   or native options on the individual listener.
+- The role checks restriction names after Postfix expands parameters and service
+  overrides. Use a native restriction, a lookup table or a class declared in
+  smtpd_restriction_classes. A misspelled name reports the service and parameter
+  before the running configuration changes. On Postfix 3.9 and later, the same
+  check rejects check_relay_domains, permit_naked_ip_address and
+  reject_maps_rbl, which the daemon no longer implements.
 - The SMTP server enforces command synchronization. The anvil defaults are 30
   AUTH attempts and 60 new connections per client and service in each
   anvil_rate_time_unit (normally 60 seconds). Account for shared client IPs when

@@ -1,39 +1,97 @@
 ---
 DOCUMENTATION:
   module: postfix_activate
-  short_description: Publish a validated configuration and reconcile the Postfix master
+  short_description: Discover, validate and activate Postfix configuration
   description:
-    - Compares the candidate and reload-sensitive files with the last successful service action.
-    - Publishes the pair checked by the role and records activation only after the service command succeeds.
+    - Uses a locked private workspace for one operation and removes abandoned workspaces on the next invocation.
+    - Publishes the validated pair and records activation after a successful service action.
   options:
-    candidate:
-      description: Private configuration directory created by the role under /etc/postfix.
-      type: path
+    operation:
+      description: Read the package capabilities, inspect the candidate or install the inspected pair.
+      type: str
+      choices: [discover, validate, activate]
       required: true
+    setgid_group:
+      description: Distribution-specific Postfix group used for isolated discovery.
+      type: str
+    configuration:
+      description: Exact main.cf and master.cf contents for validation and activation.
+      type: dict
+      suboptions:
+        main.cf:
+          description: Rendered global configuration.
+          type: str
+          required: true
+        master.cf:
+          description: Rendered service table.
+          type: str
+          required: true
+    indexes:
+      description: Missing or stale lookup indexes to build before activation.
+      type: list
+      elements: dict
+      default: []
+      suboptions:
+        command:
+          description: Native lookup compiler.
+          type: str
+          choices: [postmap, postalias]
+          required: true
+        map:
+          description: Native table type and path.
+          type: str
+          required: true
     lookup_files:
-      description: Desired text lookups and SQL or LDAP connection files read into daemon memory.
+      description: Desired text lookups and SQL or LDAP connections read into daemon memory.
       type: list
       elements: path
-      required: true
+      default: []
     service_manager:
-      description: Service manager discovered on the target.
+      description: Service manager used for activation.
       type: str
-      required: true
     backup:
-      description: Save existing configuration files before replacing their contents.
+      description: Save the existing configuration before replacing its contents.
       type: bool
       default: false
   author:
     - Jonas Mauer
 EXAMPLES: |-
-  - name: Activate the validated Postfix generation
+  - name: Discover Postfix capabilities
     postfix_activate:
-      candidate: /etc/postfix/.candidate-example
-      lookup_files: []
-      service_manager: systemd
+      operation: discover
+      setgid_group: postdrop
 RETURN:
   action:
-    description: Service action needed for the requested generation.
+    description: Service action for the requested configuration.
     type: str
-    returned: always
-    sample: reload
+    returned: on activation
+  policies:
+    description: Expanded SMTP restrictions and restriction classes by service.
+    type: dict
+    returned: on validation
+  default_map:
+    description: Compiled default table type.
+    type: str
+    returned: on discovery
+  version:
+    description: Installed Postfix version.
+    type: str
+    returned: on discovery
+  proxy_maps:
+    description: Compiled proxy read maps.
+    type: str
+    returned: on discovery
+  drivers:
+    description: Installed lookup drivers.
+    type: list
+    elements: str
+    returned: on discovery
+  sasl:
+    description: Available server authentication providers.
+    type: list
+    elements: str
+    returned: on discovery
+  smtp_features:
+    description: Native synchronization and newline policy parameters supported by this build.
+    type: str
+    returned: on discovery

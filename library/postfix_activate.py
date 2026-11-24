@@ -3,16 +3,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass
 import fcntl
 import hashlib
 import json
 import os
-from pathlib import Path
+import re
+import shutil
 import stat
-from tempfile import NamedTemporaryFile
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+from typing import Any
 
 from ansible.module_utils.basic import AnsibleModule
 
@@ -71,6 +74,30 @@ def directory_lock(path: Path) -> Iterator[None]:
         yield
     finally:
         os.close(descriptor)
+
+
+@contextmanager
+def candidate_workspace(
+    root: Path, check_mode: bool = False
+) -> Iterator[tuple[Path, int]]:
+    """Hold the same host lock from allocation through deletion, including check mode."""
+    with directory_lock(root):
+        abandoned = 0
+        for path in root.glob(".candidate-*"):
+            # Only reclaim the random names made by tempfile, including earlier role versions.
+            if not re.fullmatch(r"\.candidate-[a-z0-9_]{8}", path.name):
+                continue
+            info = path.lstat()
+            if (
+                stat.S_ISDIR(info.st_mode)
+                and info.st_uid == os.geteuid()
+                and stat.S_IMODE(info.st_mode) == 0o700
+            ):
+                abandoned += 1
+                if not check_mode:
+                    shutil.rmtree(path)
+        with TemporaryDirectory(dir=root, prefix=".candidate-") as directory:
+            yield Path(directory), abandoned
 
 
 def write_file(module: AnsibleModule, path: Path, data: bytes, mode: int) -> None:
@@ -273,27 +300,172 @@ def activate(module: AnsibleModule, candidate: Path) -> str:
     return action
 
 
+RESTRICTIONS = tuple(
+    f"smtpd_{phase}_restrictions"
+    for phase in (
+        "client",
+        "helo",
+        "sender",
+        "relay",
+        "recipient",
+        "etrn",
+        "data",
+        "end_of_data",
+    )
+)
+
+
+def discovery(module: AnsibleModule, candidate: Path) -> dict[str, Any]:
+    """Use package defaults independently of a possibly damaged live configuration."""
+    (candidate / "main.cf").write_text(
+        f"inet_interfaces = all\nsetgid_group = {module.params['setgid_group']}\n",
+        encoding="utf-8",
+    )
+    command = ["postconf", "-c", str(candidate)]
+    default_map, version, proxy = native(
+        module,
+        [*command, "-dh", "default_database_type", "mail_version", "proxy_read_maps"],
+    ).splitlines()
+    return {
+        "default_map": default_map,
+        "version": version,
+        "proxy_maps": proxy,
+        "drivers": native(module, [*command, "-m"]).splitlines(),
+        "sasl": native(module, [*command, "-a"]).splitlines(),
+        "smtp_features": native(
+            module,
+            [
+                *command,
+                "-d",
+                "smtpd_forbid_bare_newline_reject_code",
+                "smtpd_forbid_unauth_pipelining",
+            ],
+        ),
+    }
+
+
+def assignments(output: str) -> dict[str, str]:
+    """Postconf unfolds native values, including empty assignments, to individual lines."""
+    result = {}
+    for line in output.splitlines():
+        key, separator, value = line.partition("=")
+        if separator:
+            result[key.strip()] = value.strip()
+    return result
+
+
+def effective_policies(
+    module: AnsibleModule, candidate: Path
+) -> dict[str, dict[str, str]]:
+    """Ask Postfix to expand each smtpd's restrictions and named classes in its own scope."""
+    command = ["postconf", "-c", str(candidate)]
+    config = candidate / "main.cf"
+    base = config.read_text(encoding="utf-8")
+    result = {}
+    for service, overrides in smtpd_overrides(module, command).items():
+        # Table values and SASL secrets stay off the command line.
+        config.write_text("\n".join([base, *overrides, ""]), encoding="utf-8")
+        names = native(module, [*command, "-xh", "smtpd_restriction_classes"])
+        classes = names.replace(",", " ").split()
+        if any(
+            not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", name) for name in classes
+        ):
+            raise ValueError(f"{service}: invalid smtpd_restriction_classes name")
+        values = assignments(native(module, [*command, "-x", *RESTRICTIONS, *classes]))
+        values["smtpd_restriction_classes"] = names
+        result[service] = values
+    return result
+
+
+def smtpd_overrides(module: AnsibleModule, command: list[str]) -> dict[str, list[str]]:
+    """Collect master.cf overrides for smtpd services, including postscreen backends."""
+    services: dict[str, list[str]] = {}
+    for row in native(module, [*command, "-M"]).splitlines():
+        fields = row.split()
+        if (
+            len(fields) >= 8
+            and not row[0].isspace()
+            and fields[7].rsplit("/", 1)[-1] == "smtpd"
+        ):
+            services["/".join(fields[:2])] = []
+    for key, value in assignments(native(module, [*command, "-P"])).items():
+        service, _, name = key.rpartition("/")
+        if service in services:
+            services[service].append(f"{name} = {value}")
+    return services or {"main.cf": []}
+
+
+def run_operation(module: AnsibleModule, candidate: Path) -> dict[str, Any]:
+    """Use a private native configuration for this single, lock-protected operation."""
+    operation = module.params["operation"]
+    if operation == "discover":
+        return {"changed": False, **discovery(module, candidate)}
+    for name in NAMES:
+        (candidate / name).write_text(
+            module.params["configuration"][name], encoding="utf-8"
+        )
+    if operation == "validate":
+        if module.check_mode:
+            native(module, ["postconf", "-c", str(candidate), "-m"])
+        else:
+            native(module, ["postfix", "-c", str(candidate), "check"])
+        return {"changed": False, "policies": effective_policies(module, candidate)}
+
+    indexes = module.params["indexes"]
+    if not module.check_mode:
+        for index in indexes:
+            native(module, [index["command"], "-c", str(candidate), index["map"]])
+    action = activate(module, candidate)
+    return {"changed": bool(indexes) or action != "none", "action": action}
+
+
 def main() -> None:
-    """Run activation with check-mode support."""
+    """Discover, validate or activate without leaving workspaces open between Ansible tasks."""
     module = AnsibleModule(
         argument_spec={
-            "candidate": {"type": "path", "required": True},
-            "lookup_files": {"type": "list", "elements": "path", "required": True},
-            "service_manager": {"type": "str", "required": True},
+            "operation": {
+                "type": "str",
+                "choices": ["discover", "validate", "activate"],
+                "required": True,
+            },
+            "setgid_group": {"type": "str"},
+            "configuration": {
+                "type": "dict",
+                "no_log": True,
+                "options": {name: {"type": "str", "required": True} for name in NAMES},
+            },
+            "indexes": {
+                "type": "list",
+                "elements": "dict",
+                "default": [],
+                "options": {
+                    "command": {
+                        "type": "str",
+                        "choices": ["postmap", "postalias"],
+                        "required": True,
+                    },
+                    "map": {"type": "str", "required": True},
+                },
+            },
+            "lookup_files": {"type": "list", "elements": "path", "default": []},
+            "service_manager": {"type": "str"},
             "backup": {"type": "bool", "default": False},
         },
+        required_if=[
+            ("operation", "discover", ["setgid_group"]),
+            ("operation", "validate", ["configuration"]),
+            ("operation", "activate", ["configuration", "service_manager"]),
+        ],
         supports_check_mode=True,
     )
     try:
-        candidate = Path(module.params["candidate"])
-        if candidate.parent != CONFIG or not candidate.name.startswith(".candidate-"):
-            raise ValueError("Expected a private candidate directory in /etc/postfix")
-        with directory_lock(CONFIG):
-            action = activate(module, candidate)
+        with candidate_workspace(CONFIG, module.check_mode) as (candidate, abandoned):
+            result = run_operation(module, candidate)
+            result["changed"] = result["changed"] or abandoned > 0
     except (OSError, ValueError) as exc:
         module.fail_json(msg=str(exc))
     else:
-        module.exit_json(changed=action != "none", action=action)
+        module.exit_json(**result)
 
 
 if __name__ == "__main__":

@@ -8,10 +8,10 @@ smtpd_tls_auth_only = yes
 smtpd_tls_security_level = none
 smtpd_helo_required = yes
 disable_vrfy_command = yes
-{% if 'smtpd_forbid_unauth_pipelining =' in __postfix_smtp_features.stdout %}
+{% if 'smtpd_forbid_unauth_pipelining =' in __postfix_package.smtp_features %}
 smtpd_forbid_unauth_pipelining = yes
 {% endif %}
-{% if 'smtpd_forbid_bare_newline_reject_code =' in __postfix_smtp_features.stdout %}
+{% if 'smtpd_forbid_bare_newline_reject_code =' in __postfix_package.smtp_features %}
 smtpd_forbid_bare_newline = {{ postfix_forbid_bare_newline }}
 smtpd_forbid_bare_newline_exclusions = {{ postfix_bare_newline_exclusions | join(', ') }}
 {% endif %}
@@ -31,7 +31,7 @@ managed_sender_protection = check_sender_access $managed_protected_map
 {% endif %}
 {% endif %}
 {% if (postfix_ldap_enabled or postfix_account_backend != 'files') %}
-proxy_read_maps = {{ __postfix_native.stdout_lines[2] }}
+proxy_read_maps = {{ __postfix_package.proxy_maps }}
 {% if postfix_ldap_enabled and postfix_sasl_access_enabled %}
     proxy:ldap:{{ __postfix_dir }}/ldap-sasl_access.cf
 {% endif %}

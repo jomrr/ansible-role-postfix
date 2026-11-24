@@ -40,7 +40,10 @@
         relay: clients
         clients: [127.0.0.1/32]
         sender_login_match: false
-        sender_restrictions: [check_sender_access $managed_table_clients]
+        sender_restrictions: [application_senders]
+        options:
+          smtpd_restriction_classes: application_senders
+          application_senders: check_sender_access $managed_table_clients
   block:
     - name: POSTFIX | Configure a public MX, source relay and internal delivery listener
       ansible.builtin.include_role:

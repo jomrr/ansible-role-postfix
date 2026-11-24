@@ -6,7 +6,11 @@
   become: true
   become_user: root
   postfix_activate:
-    candidate: "{{ __postfix_stage.path }}"
+    operation: activate
+    configuration: "{{ __postfix_configuration }}"
+    indexes: >-
+      {{ __postfix_tables | postfix_stale_indexes(__postfix_table_files.files,
+         (__postfix_public_tables.results + __postfix_secret_tables.results) | selectattr('changed') | map(attribute='__postfix_map') | list) }}
     lookup_files: >-
       {{ __postfix_tables | postfix_reload_files(__postfix_database_queries if postfix_account_backend != 'files' else [], __postfix_ldap_names) }}
     service_manager: "{{ ansible_facts.service_mgr }}"

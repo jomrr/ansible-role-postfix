@@ -2,6 +2,16 @@
 # role: postfix
 # file: molecule/resources/playbooks/prepare.yml
 
+- name: POSTFIX | Run the role's Python unit tests on the controller
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: POSTFIX | Exercise policy validation, lookup routing and interrupted workspaces
+      ansible.builtin.command:
+        argv: ["{{ ansible_playbook_python }}", -m, unittest, discover, -s, tests/unit]
+        chdir: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+      changed_when: false
+
 - name: POSTFIX | Prepare the shared AD directory
   hosts: postfix_directory
   gather_facts: false

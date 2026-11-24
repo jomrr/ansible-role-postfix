@@ -5,18 +5,18 @@ from __future__ import annotations
 
 import argparse
 import base64
-from contextlib import ExitStack
-from dataclasses import dataclass, field
-from functools import partial
-from pathlib import Path
 import smtplib
 import socket
 import socketserver
 import ssl
 import subprocess
 import threading
-from typing import BinaryIO, cast
 import uuid
+from contextlib import ExitStack
+from dataclasses import dataclass, field
+from functools import partial
+from pathlib import Path
+from typing import BinaryIO, cast
 
 from smtp_client import in_mailbox, message, submission, tls_connection, wait_for
 

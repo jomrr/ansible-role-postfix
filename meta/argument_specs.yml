@@ -59,11 +59,11 @@ argument_specs:
       postfix_tls_certificate:
         type: str
         default: ''
-        description: Certificate chain required by any listener enforcing authentication.
+        description: PEM certificate chain for listeners that provide or require TLS.
       postfix_tls_private_key:
         type: str
         default: ''
-        description: Private key required by either submission service.
+        description: PEM private key matching the certificate chain for TLS-enabled listeners.
       postfix_tls_ca_file:
         type: str
         default: ''

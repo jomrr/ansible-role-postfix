@@ -27,3 +27,51 @@ repos:
       - id: detect-private-key
       - id: end-of-file-fixer
       - id: trailing-whitespace
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: ruff check
+        language: python
+        additional_dependencies:
+          - ansible-core==2.22.*
+          - mypy
+          - pylint
+          - ruff
+        types:
+          - python
+      - id: mypy
+        name: mypy
+        entry: env MYPYPATH=molecule/resources/tests mypy --explicit-package-bases
+          --follow-untyped-imports
+        language: python
+        additional_dependencies:
+          - ansible-core==2.22.*
+          - mypy
+          - pylint
+          - ruff
+        types:
+          - python
+      - id: pylint
+        name: pylint
+        entry: env PYTHONPATH=. pylint
+        language: python
+        additional_dependencies:
+          - ansible-core==2.22.*
+          - mypy
+          - pylint
+          - ruff
+        types:
+          - python
+      - id: unit-tests
+        name: Postfix unit tests
+        entry: python -m unittest discover -s tests/unit
+        language: python
+        additional_dependencies:
+          - ansible-core==2.22.*
+          - mypy
+          - pylint
+          - ruff
+        pass_filenames: false
+        types:
+          - python

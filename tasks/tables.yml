@@ -64,16 +64,3 @@
   loop: "{{ __postfix_tables | postfix_exposed_indexes(__postfix_table_files.files) }}"
   loop_control:
     loop_var: __postfix_path
-
-- name: POSTFIX | Build missing, changed or stale native indexes
-  become: true
-  become_user: root
-  ansible.builtin.command:
-    argv: ["{{ __postfix_index.command }}", -c, "{{ __postfix_stage.path }}", "{{ __postfix_index.map }}"]
-  loop: >-
-    {{ __postfix_tables | postfix_stale_indexes(__postfix_table_files.files,
-       (__postfix_public_tables.results + __postfix_secret_tables.results) | selectattr('changed') | map(attribute='__postfix_map') | list) }}
-  loop_control:
-    loop_var: __postfix_index
-    label: "{{ __postfix_index.map }}"
-  changed_when: true

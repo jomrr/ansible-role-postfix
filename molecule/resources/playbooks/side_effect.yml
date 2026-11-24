@@ -16,7 +16,7 @@
   tasks:
     - name: POSTFIX | Configure the Dovecot test service
       ansible.builtin.include_role:
-        name: jomrr.postfix_test_dovecot
+        name: jomrr.postfix_test_dovecot_24
 
 - name: POSTFIX | Exercise SMTP operating modes on the installed servers
   hosts: postfix_servers

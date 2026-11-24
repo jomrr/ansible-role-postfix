@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import smtplib
+import ssl
+import time
 from collections.abc import Callable
 from email.message import EmailMessage
 from email.parser import BytesHeaderParser
 from pathlib import Path
-import smtplib
-import ssl
-import time
 
 
 def wait_for(predicate: Callable[[], bool], description: str) -> None:
