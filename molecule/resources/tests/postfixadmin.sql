@@ -3,7 +3,8 @@ CREATE TABLE domain (domain VARCHAR(255) PRIMARY KEY, active BOOLEAN, backupmx B
 CREATE TABLE mailbox (username VARCHAR(255) PRIMARY KEY, domain VARCHAR(255), active BOOLEAN);
 CREATE TABLE alias (address VARCHAR(255) PRIMARY KEY, goto TEXT, domain VARCHAR(255), active BOOLEAN);
 CREATE TABLE alias_domain (alias_domain VARCHAR(255) PRIMARY KEY, target_domain VARCHAR(255), active BOOLEAN);
-INSERT INTO domain VALUES ('example.test', TRUE, FALSE), ('disabled.test', FALSE, FALSE), ('backup.test', TRUE, TRUE);
+INSERT INTO domain VALUES ('example.test', TRUE, FALSE), ('sql-only.test', TRUE, FALSE),
+    ('disabled.test', FALSE, FALSE), ('backup.test', TRUE, TRUE);
 INSERT INTO mailbox VALUES
     ('alice@example.test', 'example.test', TRUE),
     ('bob@example.test', 'example.test', TRUE),

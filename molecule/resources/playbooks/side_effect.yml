@@ -2,28 +2,28 @@
 # role: postfix
 # file: molecule/resources/playbooks/side_effect.yml
 
-- name: POSTFIX | Exercise the closed installation and native map indexes
+- name: Exercise the closed installation and native map indexes
   hosts: postfix_servers
   gather_facts: false
   environment:
     PYTHONPATH: /etc/postfix-test
   tasks:
-    - name: POSTFIX | Start recovery with an empty fact cache
+    - name: Start recovery with an empty fact cache
       ansible.builtin.meta: clear_facts
 
-    - name: POSTFIX | Exercise the default delivery and index lifecycle
+    - name: Exercise the default delivery and index lifecycle
       ansible.builtin.import_tasks: ../tasks/recovery.yml
 
-- name: POSTFIX | Install the real Dovecot authentication and delivery services
+- name: Install the real Dovecot authentication and delivery services
   hosts: postfix_servers
   gather_facts: true
   vars_files: [../vars/dovecot.yml, ../vars/directory.yml]
   tasks:
-    - name: POSTFIX | Configure the Dovecot test service
+    - name: Configure the Dovecot test service
       ansible.builtin.include_role:
         name: jomrr.postfix_test_dovecot_24
 
-- name: POSTFIX | Exercise SMTP operating modes on the installed servers
+- name: Exercise SMTP operating modes on the installed servers
   hosts: postfix_servers
   gather_facts: true
   environment:
@@ -39,20 +39,20 @@
         special_result_attribute: member
         leaf_result_attribute: mail
   tasks:
-    - name: POSTFIX | Exercise each SQL backend and the AD lookup chain
+    - name: Exercise each SQL backend and the AD lookup chain
       ansible.builtin.include_tasks: ../tasks/backend.yml
       loop: [mysql, pgsql]
       loop_control:
         loop_var: __postfix_backend
 
-    - name: POSTFIX | Exercise MX, source relay, gateway and internal submission
+    - name: Exercise MX, source relay, gateway and internal submission
       ansible.builtin.import_tasks: ../tasks/modes.yml
 
-- name: POSTFIX | Exercise a null client without network listeners
+- name: Exercise a null client without network listeners
   hosts: postfix_servers
   gather_facts: true
   environment:
     PYTHONPATH: /etc/postfix-test
   tasks:
-    - name: POSTFIX | Configure and test the smarthost
+    - name: Configure and test the smarthost
       ansible.builtin.import_tasks: ../tasks/null_client.yml

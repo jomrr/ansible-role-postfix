@@ -118,6 +118,7 @@ Default:
 ```yaml
 postfix_local_domains:
   - $myhostname
+  - localhost.$mydomain
   - localhost
 ```
 
@@ -463,6 +464,19 @@ Default:
 
 ```yaml
 postfix_message_size_limit: 10240000
+```
+
+### `postfix_mailbox_size_limit`
+
+Type: `int`. Required: `false`.
+
+Maximum size of a local mailbox or maildir file in bytes. Zero allows unlimited
+size. A positive limit must be at least postfix_message_size_limit.
+
+Default:
+
+```yaml
+postfix_mailbox_size_limit: 51200000
 ```
 
 ### `postfix_maximal_queue_lifetime`
@@ -1097,6 +1111,15 @@ backup made with `postfix_backup: true`, then start Postfix.
   successful Kerberos or PAM authentication still needs an explicit OK when
   postfix_sasl_access_enabled is true. LDAP outage or CA failure defers lookups.
   The SASL gate also covers the null envelope sender.
+- With sender_login_match enabled, an unauthenticated receiving listener rejects
+  envelope senders from local, virtual mailbox and virtual alias domains,
+  including unassigned addresses. Active PostfixAdmin domains and their active
+  aliases are protected, as are configured LDAP address domains when LDAP is
+  enabled. Explicit file-based sender identities also remain protected. The null
+  sender is allowed for delivery status notifications.
+- An unauthenticated listener with relay set to clients accepts those senders
+  from its configured client networks by default. Set sender_login_match to true
+  on that listener to apply the same sender protection.
 - Verify visible From headers with a submission Milter. Envelope checks compare
   SMTP MAIL FROM with the authenticated login.
 

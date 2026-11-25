@@ -2,7 +2,7 @@
 # role: postfix
 # file: molecule/resources/tasks/directory.yml
 
-- name: POSTFIX | Install directory fixture tools once
+- name: Install directory fixture tools once
   become: true
   become_user: root
   ansible.builtin.apt:
@@ -10,7 +10,7 @@
     update_cache: true
     policy_rc_d: 101
 
-- name: POSTFIX | Fit the directory fixture IDs into the rootless container namespace
+- name: Fit the directory fixture IDs into the rootless container namespace
   become: true
   become_user: root
   ansible.builtin.replace:
@@ -24,7 +24,7 @@
     loop_var: __postfix_bound
     label: "{{ __postfix_bound.key }}"
 
-- name: POSTFIX | Provision the isolated directory
+- name: Provision the isolated directory
   become: true
   become_user: root
   ansible.builtin.command:
@@ -43,7 +43,7 @@
   failed_when: __postfix_provision.rc != 0
   no_log: true
 
-- name: POSTFIX | Select the provisioned directory configuration
+- name: Select the provisioned directory configuration
   become: true
   become_user: root
   ansible.builtin.file:
@@ -52,7 +52,7 @@
     state: link
     force: true
 
-- name: POSTFIX | Create an ordinary directory reader for Postfix
+- name: Create an ordinary directory reader for Postfix
   become: true
   become_user: root
   ansible.builtin.command:
@@ -62,7 +62,7 @@
   failed_when: __postfix_create_reader.rc != 0
   no_log: true
 
-- name: POSTFIX | Seed directory members and a disabled account
+- name: Seed directory members and a disabled account
   become: true
   become_user: root
   ansible.builtin.command:
@@ -72,7 +72,7 @@
   changed_when: __postfix_seed_directory.rc == 0
   failed_when: __postfix_seed_directory.rc != 0
 
-- name: POSTFIX | Start the LDAPS directory
+- name: Start the LDAPS directory
   become: true
   become_user: root
   ansible.builtin.systemd_service:
@@ -80,12 +80,12 @@
     masked: false
     state: started
 
-- name: POSTFIX | Wait for the fixture LDAPS listener
+- name: Wait for the fixture LDAPS listener
   ansible.builtin.wait_for:
     host: 127.0.0.1
     port: 636
 
-- name: POSTFIX | Read the public directory CA for mail clients
+- name: Read the public directory CA for mail clients
   become: true
   become_user: root
   ansible.builtin.slurp:

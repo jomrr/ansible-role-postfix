@@ -33,6 +33,7 @@ argument_specs:
         type: list
         default:
           - $myhostname
+          - localhost.$mydomain
           - localhost
         description: Domains delivered to local Unix accounts through the local delivery
           agent.
@@ -244,6 +245,11 @@ argument_specs:
         type: int
         default: 10240000
         description: Maximum accepted message size in bytes.
+      postfix_mailbox_size_limit:
+        type: int
+        default: 51200000
+        description: Maximum size of a local mailbox or maildir file in bytes. Zero allows
+          unlimited size. A positive limit must be at least postfix_message_size_limit.
       postfix_maximal_queue_lifetime:
         type: str
         default: 5d

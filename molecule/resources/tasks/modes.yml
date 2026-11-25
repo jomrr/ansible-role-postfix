@@ -2,11 +2,13 @@
 # role: postfix
 # file: molecule/resources/tasks/modes.yml
 
-- name: POSTFIX | Exercise independent screened listeners and a text-only ACL update
+- name: Exercise independent screened listeners and a text-only ACL update
   vars:
     postfix_outbound: relayhost
     postfix_relayhost: {host: 127.0.0.1, port: 1590, tls: may}
     postfix_ldap_enabled: true
+    postfix_virtual_alias_domains: [inventory-alias.test]
+    postfix_ldap_address_domains: [directory-only.test]
     postfix_interfaces: [all]
     postfix_trusted_networks: [127.0.0.1/32]
     postfix_relay_domains: ["{{ groups['postfix_directory'][0] }}"]
@@ -14,7 +16,7 @@
     postfix_relay_transport: 'relay:[127.0.0.1]:1590'
     postfix_tables:
       screen_acl: {type: cidr, entries: {'127.0.0.2/32': "{{ __postfix_screen_rule }}"}}
-      clients: {type: native, entries: {blocked@outside.test: REJECT}}
+      sender_domain: {type: native, entries: {blocked@outside.test: REJECT}}
     postfix_listeners:
       smtp: {port: 25, auth: none, tls: may, relay: none, mx: true, postscreen: true, greet_wait: 1s}
       monitor:
@@ -39,32 +41,31 @@
         tls: none
         relay: clients
         clients: [127.0.0.1/32]
-        sender_login_match: false
         sender_restrictions: [application_senders]
         options:
           smtpd_restriction_classes: application_senders
-          application_senders: check_sender_access $managed_table_clients
+          application_senders: check_sender_access $managed_table_sender_domain
   block:
-    - name: POSTFIX | Configure a public MX, source relay and internal delivery listener
+    - name: Configure a public MX, source relay and internal delivery listener
       ansible.builtin.include_role:
         name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
       vars:
         __postfix_screen_rule: permit
 
-    - name: POSTFIX | Exercise simultaneous screened listeners and their MX defaults
+    - name: Exercise simultaneous screened listeners and their MX defaults
       ansible.builtin.script:
         cmd: ../tests/screened_mx.py permit
         executable: python3
       register: __postfix_master_before_acl
       changed_when: false
 
-    - name: POSTFIX | Change the CIDR table through the role
+    - name: Change the CIDR table through the role
       ansible.builtin.include_role:
         name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
       vars:
         __postfix_screen_rule: reject
 
-    - name: POSTFIX | Verify that new connections see the updated in-memory policy
+    - name: Verify that new connections see the updated in-memory policy
       ansible.builtin.script:
         cmd: ../tests/screened_mx.py reject
         executable: python3
@@ -72,7 +73,7 @@
       changed_when: false
       failed_when: __postfix_master_after_acl.rc != 0 or __postfix_master_after_acl.stdout != __postfix_master_before_acl.stdout
 
-- name: POSTFIX | Exercise public reception and LDAP mailbox delivery
+- name: Exercise public reception and LDAP mailbox delivery
   become: true
   become_user: root
   ansible.builtin.script:
@@ -80,7 +81,7 @@
     cmd: ../tests/smtp_checks.py --trusted-reception {{ groups['postfix_directory'][0] | quote }}
   changed_when: false
 
-- name: POSTFIX | Exercise source-restricted relay, gateway and custom table
+- name: Exercise source-restricted relay, gateway and custom table
   become: true
   become_user: root
   ansible.builtin.script:
@@ -88,7 +89,7 @@
     cmd: ../tests/operating_modes.py gateway --domain {{ groups['postfix_directory'][0] | quote }}
   changed_when: false
 
-- name: POSTFIX | Exercise Sieve local sendmail return path
+- name: Exercise Sieve local sendmail return path
   become: true
   become_user: root
   ansible.builtin.script:
@@ -96,7 +97,7 @@
     cmd: ../tests/operating_modes.py vacation --user alice
   changed_when: false
 
-- name: POSTFIX | Point the real Dovecot test service at the internal SMTP listener
+- name: Point the real Dovecot test service at the internal SMTP listener
   become: true
   become_user: root
   ansible.builtin.lineinfile:
@@ -106,14 +107,14 @@
     insertafter: EOF
     validate: doveconf -c %s -n
 
-- name: POSTFIX | Reload the Dovecot test service with SMTP submission
+- name: Reload the Dovecot test service with SMTP submission
   become: true
   become_user: root
   ansible.builtin.service:
     name: dovecot
     state: reloaded
 
-- name: POSTFIX | Exercise Sieve SMTP return path from the trusted service
+- name: Exercise Sieve SMTP return path from the trusted service
   become: true
   become_user: root
   ansible.builtin.script:
@@ -121,7 +122,7 @@
     cmd: ../tests/operating_modes.py vacation --user archive
   changed_when: false
 
-- name: POSTFIX | Configure a local-only authenticated mail hub
+- name: Configure a local-only authenticated mail hub
   ansible.builtin.include_role:
     name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   vars:
@@ -131,7 +132,7 @@
     postfix_listeners:
       submission: {port: 1588}
 
-- name: POSTFIX | Verify restricted authenticated submission and listener isolation
+- name: Verify restricted authenticated submission and listener isolation
   become: true
   become_user: root
   ansible.builtin.script:
@@ -139,26 +140,26 @@
     cmd: ../tests/operating_modes.py hub
   changed_when: false
 
-- name: POSTFIX | Exercise handler dispatch after a later configuration error
+- name: Exercise handler dispatch after a later configuration error
   block:
-    - name: POSTFIX | Change the SMTP banner and request a duplicate master service
+    - name: Change the SMTP banner and request a duplicate master service
       ansible.builtin.include_role:
         name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
       vars:
         postfix_main_cf: {smtpd_banner: '$myhostname ESMTP molecule-flush'}
         postfix_master_cf: [{name: pickup, type: unix, command: pickup}]
 
-    - name: POSTFIX | Flag unexpected acceptance of a duplicate master service
+    - name: Flag unexpected acceptance of a duplicate master service
       ansible.builtin.fail:
         msg: Postfix accepted a duplicate pickup service.
 
   rescue:
-    - name: POSTFIX | Verify the failure occurred while rendering master.cf
+    - name: Verify the failure occurred while rendering master.cf
       ansible.builtin.assert:
         that: "'Duplicate master.cf service pickup/unix' in ansible_failed_result.msg"
         quiet: true
 
-    - name: POSTFIX | Verify the running listener already serves the new banner
+    - name: Verify the running listener already serves the new banner
       ansible.builtin.wait_for:
         host: 127.0.0.1
         port: 1588

@@ -2,13 +2,13 @@
 # role: postfix
 # file: molecule/resources/playbooks/verify.yml
 
-- name: POSTFIX | Verify return to a closed default installation
+- name: Verify return to a closed default installation
   hosts: postfix_servers
   gather_facts: false
   environment:
     PYTHONPATH: /etc/postfix-test
   tasks:
-    - name: POSTFIX | Verify the running service and closed network policy
+    - name: Verify the running service and closed network policy
       become: true
       become_user: root
       ansible.builtin.script:

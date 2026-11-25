@@ -192,6 +192,21 @@ def verify_authentication(context: ssl.SSLContext) -> None:
             raise AssertionError("Wrong password accepted")
 
 
+def verify_protected_senders(client: smtplib.SMTP, senders: tuple[str, ...]) -> None:
+    """Require a sender-policy rejection for delivery to a valid recipient."""
+    client.ehlo_or_helo_if_needed()
+    for sender in senders:
+        client.rset()
+        code, response = client.mail(sender)
+        assert code == 250, (sender, code, response)
+        code, response = client.rcpt("bob@example.test")
+        assert code // 100 == 5 and b"requires authenticated submission" in response, (
+            sender,
+            code,
+            response,
+        )
+
+
 def verify_trusted_reception(context: ssl.SSLContext, domain: str) -> None:
     """Explicit authentication exceptions must still prevent relaying and spoofing."""
     with smtplib.SMTP(
@@ -202,11 +217,18 @@ def verify_trusted_reception(context: ssl.SSLContext, domain: str) -> None:
         assert client.rcpt("sink@outside.test")[0] >= 500, (
             "Unauthenticated relay accepted"
         )
-        for sender in ("alice@example.test", "directory@example.test"):
-            client.rset()
-            assert client.mail(sender)[0] == 250
-            code, response = client.rcpt("bob@example.test")
-            assert code >= 500 and b"requires authenticated submission" in response
+        verify_protected_senders(
+            client,
+            (
+                "alice@example.test",
+                "sales@example.test",
+                "ceo@EXAMPLE.TEST",
+                "ceo@inventory-alias.test",
+                "ceo@directory-only.test",
+                "ceo@mail.example.test",
+                "ceo@localhost.example.test",
+            ),
+        )
         client.rset()
         assert client.mail("user@absent.invalid")[0] == 250
         code, response = client.rcpt("directory@example.test")
@@ -285,6 +307,14 @@ def verify_local_sender() -> None:
 def verify_accounts(context: ssl.SSLContext) -> None:
     """Exercise SQL-backed sender ownership, shared aliases and alias-domain delivery."""
     token = uuid.uuid4().hex
+    with smtplib.SMTP("localhost", 2528, timeout=10) as client:
+        verify_protected_senders(
+            client, ("ceo@sql-only.test", "unknown@alias.test", "root@app.example.test")
+        )
+        for domain in ("backup.test", "disabled.test", "disabled-alias.test"):
+            client.rset()
+            assert client.mail("sender@" + domain)[0] == 250
+            assert client.rcpt("bob@example.test")[0] == 250
     for user in ("alice", "bob"):
         with submission(context, user) as client:
             client.send_message(

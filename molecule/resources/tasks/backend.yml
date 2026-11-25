@@ -2,7 +2,7 @@
 # role: postfix
 # file: molecule/resources/tasks/backend.yml
 
-- name: POSTFIX | Apply the SQL account backend
+- name: Apply the SQL account backend
   ansible.builtin.include_role:
     name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   vars:
@@ -22,7 +22,7 @@
       user: "{{ 'root' if __postfix_backend == 'mysql' else 'postgres' }}"
       password: molecule-database-secret
 
-- name: POSTFIX | Verify disabled records and protected SQL sender lookups
+- name: Verify disabled domains, mailboxes and missing SQL aliases
   become: true
   become_user: root
   ansible.builtin.command:
@@ -33,9 +33,6 @@
     - {map: domains, address: disabled-alias.test, expected: ''}
     - {map: mailboxes, address: disabled@example.test, expected: ''}
     - {map: alias_domains, address: unknown@alias.test, expected: ''}
-    - {map: protected_senders, address: alice@example.test, expected: REJECT Sender address requires authenticated submission}
-    - {map: protected_senders, address: alice@alias.test, expected: REJECT Sender address requires authenticated submission}
-    - {map: protected_senders, address: unknown@alias.test, expected: ''}
   loop_control:
     loop_var: __postfix_lookup
     label: "{{ __postfix_lookup.map }}:{{ __postfix_lookup.address }}"
@@ -43,7 +40,7 @@
   changed_when: false
   failed_when: __postfix_lookup_result.stdout != __postfix_lookup.expected or __postfix_lookup_result.rc not in [0, 1]
 
-- name: POSTFIX | Exercise SQL-backed authentication policy and delivery
+- name: Exercise SQL-backed authentication policy and delivery
   become: true
   become_user: root
   ansible.builtin.script:
@@ -51,11 +48,11 @@
     cmd: ../tests/smtp_checks.py --accounts
   changed_when: false
 
-- name: POSTFIX | Exercise directory eligibility and TLS with the PostgreSQL lookup chain
+- name: Exercise directory eligibility and TLS with the PostgreSQL lookup chain
   ansible.builtin.include_tasks: ldap.yml
   when: __postfix_backend == 'pgsql'
 
-- name: POSTFIX | Exercise TLS submission, relays and queue retries on the installed mail servers
+- name: Exercise TLS submission, relays and queue retries on the installed mail servers
   become: true
   become_user: root
   ansible.builtin.script:

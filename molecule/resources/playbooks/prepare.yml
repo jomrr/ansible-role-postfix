@@ -2,11 +2,11 @@
 # role: postfix
 # file: molecule/resources/playbooks/prepare.yml
 
-- name: POSTFIX | Run the role's Python unit tests on the controller
+- name: Run the role's Python unit tests on the controller
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: POSTFIX | Exercise listener and lookup routing
+    - name: Exercise listener and lookup routing
       ansible.builtin.command:
         argv: ["{{ ansible_playbook_python }}", -m, unittest, discover, -s, tests/unit]
         chdir: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
@@ -14,32 +14,32 @@
       changed_when: false
       failed_when: __postfix_unit_tests.rc != 0
 
-- name: POSTFIX | Prepare the shared AD directory
+- name: Prepare the shared AD directory
   hosts: postfix_directory
   gather_facts: false
   tasks:
-    - name: POSTFIX | Provision the LDAP test directory
+    - name: Provision the LDAP test directory
       ansible.builtin.import_tasks: ../tasks/directory.yml
 
-- name: POSTFIX | Prepare mail service integration fixtures
+- name: Prepare mail service integration fixtures
   hosts: postfix_servers
   gather_facts: true
   tasks:
-    - name: POSTFIX | Refresh APT package metadata
+    - name: Refresh APT package metadata
       become: true
       become_user: root
       ansible.builtin.apt:
         update_cache: true
       when: ansible_facts.pkg_mgr == 'apt'
 
-    - name: POSTFIX | Refresh RPM package metadata
+    - name: Refresh RPM package metadata
       become: true
       become_user: root
       ansible.builtin.dnf:
         update_cache: true
       when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
 
-    - name: POSTFIX | Refresh SUSE package metadata
+    - name: Refresh SUSE package metadata
       become: true
       become_user: root
       community.general.zypper_repository:
@@ -47,20 +47,20 @@
         runrefresh: true
       when: ansible_facts.pkg_mgr == 'zypper'
 
-    - name: POSTFIX | Install the TLS fixture tool
+    - name: Install the TLS fixture tool
       become: true
       become_user: root
       ansible.builtin.package:
         name: openssl
 
-    - name: POSTFIX | Create the fixture mailbox group
+    - name: Create the fixture mailbox group
       become: true
       become_user: root
       ansible.builtin.group:
         name: postfix_test
         gid: 5010
 
-    - name: POSTFIX | Create the fixture mailbox owner
+    - name: Create the fixture mailbox owner
       become: true
       become_user: root
       ansible.builtin.user:
@@ -69,7 +69,7 @@
         group: postfix_test
         create_home: false
 
-    - name: POSTFIX | Create fixture directories
+    - name: Create fixture directories
       become: true
       become_user: root
       ansible.builtin.file:
@@ -80,7 +80,7 @@
       loop_control:
         loop_var: __postfix_directory
 
-    - name: POSTFIX | Install the shared SMTP client helper
+    - name: Install the shared SMTP client helper
       become: true
       become_user: root
       ansible.builtin.copy:
@@ -88,7 +88,7 @@
         dest: /etc/postfix-test/smtp_client.py
         mode: '0644'
 
-    - name: POSTFIX | Trust the directory fixture CA for LDAP lookups
+    - name: Trust the directory fixture CA for LDAP lookups
       become: true
       become_user: root
       ansible.builtin.copy:
@@ -96,7 +96,7 @@
         dest: /etc/postfix-test/ldap-ca.pem
         mode: '0644'
 
-    - name: POSTFIX | Create the disposable localhost certificate and key
+    - name: Create the disposable localhost certificate and key
       become: true
       become_user: root
       ansible.builtin.command:
@@ -107,14 +107,14 @@
       changed_when: __postfix_certificate.changed
       failed_when: __postfix_certificate.rc != 0
 
-- name: POSTFIX | Prepare PostfixAdmin in the official database containers
+- name: Prepare PostfixAdmin in the official database containers
   hosts: postfix_mysql:postfix_pgsql
   gather_facts: false
   vars:
     __postfix_db_command: "{{ 'mariadb -uroot -pmolecule-database-secret postfixadmin -e' if 'postfix_mysql' in group_names
                               else 'psql -U postgres -d postfixadmin -v ON_ERROR_STOP=1 -c' }}"
   tasks:
-    - name: POSTFIX | Load the test schema through the database image's native client
+    - name: Load the test schema through the database image's native client
       ansible.builtin.raw: >-
         {{ __postfix_db_command }} {{ lookup('ansible.builtin.file', '../tests/postfixadmin.sql') | quote }}
       register: __postfix_db_init

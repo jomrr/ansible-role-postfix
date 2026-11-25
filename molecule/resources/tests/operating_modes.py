@@ -35,6 +35,7 @@ def closed() -> None:
         row.split()[1] == "inet" for row in command("postconf", "-M").splitlines()
     )
     assert command("postconf", "-h", "maillog_file") == ""
+    assert command("postconf", "-h", "mailbox_size_limit") == "51200000"
     assert not Path("/etc/logrotate.d/ansible-postfix").exists()
     assert not any(MAPS.glob("sasl_passwd.*~"))
     assert not any(MAPS.glob("*.cf.*~"))
@@ -45,7 +46,7 @@ def bounce() -> None:
     """A locally submitted external address must generate a permanent local DSN."""
     closed()
     identifier = uuid.uuid4().hex
-    local = "root@" + command("postconf", "-h", "myhostname")
+    local = "root@localhost." + command("postconf", "-h", "mydomain")
     recipient = identifier + "@outside.test"
     subprocess.run(
         ["sendmail", "-f", local, "--", recipient],
@@ -157,6 +158,7 @@ def submission_overrides() -> str:
 
 def gateway(domain: str) -> None:
     """Exercise the public MX, listed gateway recipients and restricted relay."""
+    assert command("postconf", "-h", "mailbox_size_limit") == "10240000"
     (TESTS / "submission-overrides").write_text(
         submission_overrides(), encoding="utf-8"
     )
@@ -186,14 +188,14 @@ def gateway(domain: str) -> None:
                 client.rset()
                 client.send_message(
                     message(
-                        "allowed@outside.test", "sink@outside.test", marker + "relay"
+                        "application@example.test", "sink@outside.test", marker + "relay"
                     )
                 )
             assert (marker + "relay").encode() in Sink.received.get(timeout=30)
             with smtplib.SMTP(
                 "localhost", 2526, source_address=("127.0.0.2", 0), timeout=10
             ) as client:
-                client.mail("allowed@outside.test")
+                client.mail("application@example.test")
                 assert client.rcpt("sink@outside.test")[0] >= 500
         finally:
             server.shutdown()

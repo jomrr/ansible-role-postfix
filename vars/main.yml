@@ -5,6 +5,7 @@
 __postfix_required_facts: [fqdn, system, os_family, distribution, pkg_mgr, service_mgr]
 __postfix_required_facts_subsets: ['!all', '!min', platform, distribution, pkg_mgr, service_mgr]
 __postfix_hostname: "{{ postfix_hostname | default(ansible_facts.fqdn | default(inventory_hostname)) }}"
+__postfix_limits_overridden: "{{ 'mailbox_size_limit' in postfix_main_cf or 'message_size_limit' in postfix_main_cf }}"
 
 __postfix_packages: >-
   {{ __postfix_base_packages
@@ -13,6 +14,10 @@ __postfix_packages: >-
      + (['postfix-pcre'] if 'pcre' in postfix_tables.values() | map(attribute='type', default='native') else []) }}
 
 __postfix_dir: /etc/postfix/managed
+__postfix_sender_reject: REJECT Sender address requires authenticated submission
+__postfix_protected_domains: >-
+  {{ (postfix_local_domains + postfix_virtual_mailbox_domains + postfix_virtual_alias_domains
+      + (postfix_ldap_address_domains if postfix_ldap_enabled else [])) | unique }}
 __postfix_listeners: >-
   {{ postfix_listeners | postfix_listener_services(postfix_outbound, postfix_main_cf.get('smtpd_discard_ehlo_keywords', '')) }}
 __postfix_provider_tables: >-
@@ -40,7 +45,10 @@ __postfix_builtin_tables:
     parameter: "{{ 'managed_protected_map' if __postfix_listeners | selectattr('protect') | length else '' }}"
     entries: >-
       {{ dict((postfix_mailboxes + (postfix_sender_logins | list))
-         | zip_longest([], fillvalue='REJECT Sender address requires authenticated submission')) }}
+         | zip_longest([], fillvalue=__postfix_sender_reject)) }}
+  sender-domain:
+    type: regexp
+    entries: {'/@([^@]+)$/': '$1'}
   sasl_access:
     parameter: "{{ 'managed_sasl_map' if postfix_sasl_access_enabled and __postfix_listeners | selectattr('auth', 'equalto', 'required') | length else '' }}"
     entries: "{{ dict(postfix_sasl_access_logins | zip_longest([], fillvalue='OK')) }}"
@@ -94,11 +102,6 @@ __postfix_ldap_maps:
     key: login_attribute
     result: login_attribute
     format: OK
-  - name: protected_senders
-    enabled: "{{ postfix_ldap_enabled and (__postfix_listeners | selectattr('protect') | length > 0) }}"
-    key: mail_attribute
-    result: mail_attribute
-    format: REJECT Sender address requires authenticated submission
 
 __postfix_database_queries:
   domains: >-
@@ -132,16 +135,9 @@ __postfix_database_queries:
     AND a.address=CONCAT('%u','@',ad.target_domain) AND a.active=TRUE AND ad.active=TRUE
     AND d.active=TRUE AND d.backupmx=FALSE
   protected_senders: >-
-    SELECT 'REJECT Sender address requires authenticated submission' FROM mailbox m
-    JOIN domain d ON d.domain=m.domain WHERE m.username='%s'
-    AND m.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
-    UNION SELECT 'REJECT Sender address requires authenticated submission' FROM alias a
-    JOIN domain d ON d.domain=a.domain WHERE a.address='%s'
-    AND a.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
-    UNION SELECT 'REJECT Sender address requires authenticated submission' FROM alias a
-    JOIN alias_domain ad ON a.domain=ad.target_domain JOIN domain d ON d.domain=ad.target_domain
-    WHERE ad.alias_domain='%d' AND a.address=CONCAT('%u','@',ad.target_domain)
-    AND a.active=TRUE AND ad.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
+    SELECT '{{ __postfix_sender_reject }}' FROM domain WHERE domain='%d' AND active=TRUE AND backupmx=FALSE
+    UNION SELECT '{{ __postfix_sender_reject }}' FROM alias_domain ad JOIN domain d ON d.domain=ad.target_domain
+    WHERE ad.alias_domain='%d' AND ad.active=TRUE AND d.active=TRUE AND d.backupmx=FALSE
 
 __postfix_outbound_parameters:
   - default_transport

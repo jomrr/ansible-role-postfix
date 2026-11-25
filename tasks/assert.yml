@@ -12,6 +12,7 @@
       - postfix_provider_port > 0 and postfix_provider_port < 65536
       - postfix_interfaces | length > 0
       - postfix_message_size_limit > 0
+      - __postfix_limits_overridden or postfix_mailbox_size_limit == 0 or postfix_mailbox_size_limit >= postfix_message_size_limit
       - postfix_compatibility_level is match('^[0-9]+(\.[0-9]+)*\Z')
       - postfix_smtp_bind_address is not search('[\s\x00]') and postfix_smtp_bind_address6 is not search('[\s\x00]')
       - postfix_recipient_delimiter is not search('[\s\x00]')

@@ -234,7 +234,7 @@ def restrictions(spec: dict[str, Any], outbound: str) -> dict[str, list[str]]:
     senders = []
     if spec.get("mx"):
         senders.append("reject_non_fqdn_sender")
-    if spec.get("sender_login_match", True):
+    if spec.get("sender_login_match", auth == "required" or relay != "clients"):
         senders.append(
             "reject_sender_login_mismatch"
             if auth == "required"
@@ -322,7 +322,7 @@ class FilterModule:
                     "bind": endpoint,
                     "tls": tls,
                     "auth": auth,
-                    "protect": spec.get("sender_login_match", True) and auth == "none",
+                    "protect": "$managed_sender_protection" in policy["sender"],
                     "policy": policy,
                     "options": options | extra,
                     "postscreen": spec.get("postscreen", False),

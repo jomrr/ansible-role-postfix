@@ -29,7 +29,7 @@ postfix_listeners: {}
 # Local delivery and submission
 
 # Domains delivered to local Unix accounts through the local delivery agent.
-postfix_local_domains: ['$myhostname', localhost]
+postfix_local_domains: ['$myhostname', 'localhost.$mydomain', localhost]
 
 # Local aliases. Set root to a monitored address or local mailbox.
 postfix_local_aliases: {postmaster: root, mailer-daemon: postmaster, abuse: postmaster}
@@ -226,6 +226,9 @@ postfix_relay_transport: relay
 
 # Maximum accepted message size in bytes.
 postfix_message_size_limit: 10240000
+
+# Maximum size of a local mailbox or maildir file in bytes, or zero for unlimited size.
+postfix_mailbox_size_limit: 51200000
 
 # Maximum time that undelivered messages remain queued.
 postfix_maximal_queue_lifetime: 5d

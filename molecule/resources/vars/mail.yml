@@ -59,8 +59,10 @@ postfix_queue_run_delay: 1s
 postfix_virtual_mailbox_domains:
   - example.test
 postfix_outbound: direct
+postfix_mailbox_size_limit: 10240000
 postfix_log_file: /var/log/postfix.log
 postfix_listeners:
+  reception: {port: 2528, address: 127.0.0.1, tls: none, auth: none, relay: none}
   smtp:
     port: 25
     clients:

@@ -83,7 +83,8 @@ def table_catalog(
         raise ValueError("A custom table name collides with a built-in table")
     result = {}
     for name, item in (builtins | custom).items():
-        if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not isinstance(item, Mapping):
+        name_pattern = r"[a-z][a-z0-9_]*" if name in custom else r"[a-z][a-z0-9_-]*"
+        if not re.fullmatch(name_pattern, name) or not isinstance(item, Mapping):
             raise ValueError("Invalid managed table definition")
         if set(item) - {"type", "entries", "parameter", "secret", "aliases", "mode"}:
             raise ValueError(f"Unknown field in table {name}")

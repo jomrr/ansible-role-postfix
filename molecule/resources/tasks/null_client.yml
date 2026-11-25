@@ -2,7 +2,7 @@
 # role: postfix
 # file: molecule/resources/tasks/null_client.yml
 
-- name: POSTFIX | Route all mail through the verified null-client relay
+- name: Route all mail through the verified null-client relay
   ansible.builtin.include_role:
     name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   vars:
@@ -12,7 +12,7 @@
     postfix_relayhost: {host: localhost, port: 1587, tls: secure, username: provider-a, password: relay-a-secret}
     postfix_tls_ca_file: /etc/postfix-test/server.crt
 
-- name: POSTFIX | Exercise TLS smarthost delivery from local sendmail
+- name: Exercise TLS smarthost delivery from local sendmail
   become: true
   become_user: root
   ansible.builtin.script:

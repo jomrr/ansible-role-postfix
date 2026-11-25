@@ -2,7 +2,7 @@
 # role: postfix
 # file: molecule/resources/tasks/ldap.yml
 
-- name: POSTFIX | Check AD group, disabled users, login ownership and file relay exceptions
+- name: Check AD group, disabled users, login ownership and file relay exceptions
   become: true
   become_user: root
   ansible.builtin.script:
@@ -25,7 +25,7 @@
       - [1588, alice, directory@example.test, retired@example.test, 5]
   changed_when: false
 
-- name: POSTFIX | Replace directory trust with an unrelated certificate
+- name: Replace directory trust with an unrelated certificate
   become: true
   become_user: root
   ansible.builtin.copy:
@@ -36,14 +36,14 @@
     backup: true
   register: __postfix_replaced_ca
 
-- name: POSTFIX | Reconnect directory clients using the unrelated CA
+- name: Reconnect directory clients using the unrelated CA
   become: true
   become_user: root
   ansible.builtin.service:
     name: postfix
     state: restarted
 
-- name: POSTFIX | Defer submission by an eligible login with untrusted directory TLS
+- name: Defer submission by an eligible login with untrusted directory TLS
   become: true
   become_user: root
   ansible.builtin.script:
@@ -52,7 +52,7 @@
       ../tests/operating_modes.py envelopes --cases '[[1588, "alice", "", "bob@example.test", 4]]'
   changed_when: false
 
-- name: POSTFIX | Restore directory trust for public SMTP reception
+- name: Restore directory trust for public SMTP reception
   become: true
   become_user: root
   ansible.builtin.copy:

@@ -2,7 +2,7 @@
 # role: postfix
 # file: molecule/resources/playbooks/converge.yml
 
-- name: POSTFIX | Converge
+- name: Converge
   hosts: postfix_servers
   gather_facts: true
   roles:

@@ -2,7 +2,7 @@
 # role: postfix
 # file: molecule/resources/tasks/recovery.yml
 
-- name: POSTFIX | Verify default listener and local outbound bounce
+- name: Verify default listener and local outbound bounce
   become: true
   become_user: root
   ansible.builtin.script:
@@ -10,57 +10,77 @@
     cmd: ../tests/operating_modes.py bounce
   changed_when: false
 
-- name: POSTFIX | Read native indexed map format for the recovery fixture
+- name: Reject a mailbox smaller than an accepted message
+  block:
+    - name: Check unequal local delivery limits
+      ansible.builtin.include_role:
+        name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+        tasks_from: assert
+      vars:
+        postfix_mailbox_size_limit: 999
+        postfix_message_size_limit: 1000
+
+    - name: Flag acceptance of the undersized mailbox
+      ansible.builtin.fail:
+        msg: Postfix accepted a mailbox smaller than the message limit.
+
+  rescue:
+    - name: Verify that the mailbox limit triggered the failure
+      ansible.builtin.assert:
+        that: "'postfix_mailbox_size_limit' in ansible_failed_result.assertion"
+        quiet: true
+
+- name: Read native indexed map format for the recovery fixture
   ansible.builtin.command:
     argv: [postconf, -h, default_database_type]
   changed_when: false
   register: __postfix_recovery_type
   failed_when: __postfix_recovery_type.rc != 0
 
-- name: POSTFIX | Record master identity before changing only indexed data
+- name: Record master identity before changing only indexed data
   ansible.builtin.command:
     argv: [cat, /var/spool/postfix/pid/master.pid]
   changed_when: false
   register: __postfix_original_master
   failed_when: __postfix_original_master.rc != 0
 
-- name: POSTFIX | Record the installed main.cf before validation
+- name: Record the installed main.cf before validation
   ansible.builtin.stat:
     path: /etc/postfix/main.cf
   register: __postfix_installed_main
 
-- name: POSTFIX | Require native validation of the proposed main.cf
+- name: Require native validation of the proposed main.cf
   block:
-    - name: POSTFIX | Apply an invalid numerical setting
+    - name: Apply an invalid numerical setting
       ansible.builtin.include_role:
         name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
       vars:
         postfix_main_cf: {default_process_limit: 1oo}
 
-    - name: POSTFIX | Flag unexpected acceptance of the invalid main.cf
+    - name: Flag unexpected acceptance of the invalid main.cf
       ansible.builtin.fail:
         msg: Postfix accepted an invalid default_process_limit.
 
   rescue:
-    - name: POSTFIX | Verify the native validator rejected the setting
+    - name: Verify the native validator rejected the setting
       ansible.builtin.assert:
         that: "'bad numerical configuration: default_process_limit' in ansible_failed_result.stderr"
         quiet: true
 
-- name: POSTFIX | Verify the rejected template preserved the installed main.cf
+- name: Verify the rejected template preserved the installed main.cf
   ansible.builtin.stat:
     path: /etc/postfix/main.cf
   register: __postfix_after_validation
   failed_when: __postfix_after_validation.stat.checksum != __postfix_installed_main.stat.checksum
 
-- name: POSTFIX | Remove an unchanged credential index as after an interrupted run
+- name: Remove an unchanged credential index as after an interrupted run
   become: true
   become_user: root
   ansible.builtin.file:
     path: "/etc/postfix/managed/sasl_passwd.{{ {'hash': 'db', 'btree': 'db', 'lmdb': 'lmdb', 'cdb': 'cdb'}[__postfix_recovery_type.stdout] }}"
     state: absent
 
-- name: POSTFIX | Age a mailbox index without changing its source
+- name: Age a mailbox index without changing its source
   become: true
   become_user: root
   ansible.builtin.file:
@@ -70,13 +90,13 @@
     modification_time: '200001010000.00'
     access_time: preserve
 
-- name: POSTFIX | Converge changed aliases and interrupted map indexes
+- name: Converge changed aliases and interrupted map indexes
   ansible.builtin.include_role:
     name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   vars:
     postfix_local_aliases: {postmaster: root, monitoring: root}
 
-- name: POSTFIX | Verify the alias and recovered native indexes
+- name: Verify the alias and recovered native indexes
   become: true
   become_user: root
   ansible.builtin.script:

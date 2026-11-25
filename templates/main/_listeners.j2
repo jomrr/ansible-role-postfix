@@ -19,11 +19,18 @@ managed_sasl_gate = {% if postfix_sasl_access_enabled %}check_sasl_access $manag
 {% endif %}
 {% if __postfix_listeners | selectattr('protect') | length %}
 managed_sender_protection = check_sender_access $managed_protected_map
+{% if __postfix_protected_domains %}
+    check_sender_access pipemap:{
+        {{ __postfix_tables['sender-domain'].map }},
+        inline:{
+{% for domain in __postfix_protected_domains %}
+            { {{ domain }} = {{ __postfix_sender_reject }} }
+{% endfor %}
+        }
+    }
+{% endif %}
 {% if postfix_account_backend != 'files' %}
     check_sender_access proxy:{{ postfix_account_backend }}:{{ __postfix_dir }}/protected_senders.cf
-{% endif %}
-{% if postfix_ldap_enabled %}
-    check_sender_access proxy:ldap:{{ __postfix_dir }}/ldap-protected_senders.cf
 {% endif %}
 {% endif %}
 proxy_read_maps = $local_recipient_maps $virtual_mailbox_domains $virtual_mailbox_maps
@@ -31,13 +38,8 @@ proxy_read_maps = $local_recipient_maps $virtual_mailbox_domains $virtual_mailbo
 {% if postfix_ldap_enabled and postfix_sasl_access_enabled %}
     proxy:ldap:{{ __postfix_dir }}/ldap-sasl_access.cf
 {% endif %}
-{% if __postfix_listeners | selectattr('protect') | length %}
-{% if postfix_account_backend != 'files' %}
+{% if postfix_account_backend != 'files' and __postfix_listeners | selectattr('protect') | length %}
     proxy:{{ postfix_account_backend }}:{{ __postfix_dir }}/protected_senders.cf
-{% endif %}
-{% if postfix_ldap_enabled %}
-    proxy:ldap:{{ __postfix_dir }}/ldap-protected_senders.cf
-{% endif %}
 {% endif %}
 {% for service in __postfix_listeners %}
 {% for key, rules in service.policy.items() %}
