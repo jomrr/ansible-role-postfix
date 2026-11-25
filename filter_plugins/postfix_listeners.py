@@ -286,9 +286,6 @@ class FilterModule:
                 "smtpd_tls_wrappermode": "yes" if tls == "wrapper" else "no",
                 "smtpd_sasl_auth_enable": "yes" if auth == "required" else "no",
                 "smtpd_milters": ", ".join(spec.get("milters", [])),
-                "milter_macro_daemon_name": "ORIGINATING"
-                if auth == "required"
-                else "INBOUND",
             }
             if spec.get("mx"):
                 options["smtpd_etrn_restrictions"] = "reject"

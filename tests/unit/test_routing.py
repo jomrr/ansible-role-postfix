@@ -1,4 +1,4 @@
-"""Check the ambiguous relay and socket cases absent from the SMTP fixtures."""
+"""Check relay routing and listener options absent from the SMTP fixtures."""
 
 import unittest
 
@@ -7,7 +7,7 @@ from filter_plugins.postfix_tables import provider_tables
 
 
 class RoutingTests(unittest.TestCase):
-    """Protect sender-specific credentials and independent socket bindings."""
+    """Cover sender-specific credentials and per-listener configuration."""
 
     def test_shared_provider_endpoint_has_no_ambiguous_password(self) -> None:
         """Fall back to a next-hop password only when a default provider is explicit."""
@@ -39,3 +39,31 @@ class RoutingTests(unittest.TestCase):
                 FilterModule.listener_services(
                     dict(zip(("first", "second"), pair)), "none"
                 )
+
+    def test_listeners_inherit_milter_daemon_name_unless_overridden(self) -> None:
+        """MX and submission inherit the global name unless given a listener override."""
+        parameter = "milter_macro_daemon_name"
+        milters = ["inet:127.0.0.1:11332"]
+        services = FilterModule.listener_services(
+            {
+                "mx": {
+                    "port": 25,
+                    "mx": True,
+                    "tls": "may",
+                    "auth": "none",
+                    "relay": "none",
+                    "milters": milters,
+                },
+                "submission": {"port": 587, "milters": milters},
+                "custom": {
+                    "port": 2525,
+                    "milters": milters,
+                    "options": {parameter: "relay.example.org"},
+                },
+            },
+            "none",
+        )
+        options = {service["name"]: service["options"] for service in services}
+        self.assertNotIn(parameter, options["mx"])
+        self.assertNotIn(parameter, options["submission"])
+        self.assertEqual(options["custom"][parameter], "relay.example.org")
