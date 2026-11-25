@@ -141,7 +141,8 @@ postfix_trusted_networks:
 
 Type: `dict`. Required: `false`.
 
-Local aliases. Set root to a monitored address or local mailbox.
+Local delivery aliases, including an optional root alias for a monitored address
+or local mailbox.
 
 Default:
 
@@ -192,7 +193,8 @@ postfix_tls_private_key: ''
 
 Type: `str`. Required: `false`.
 
-Additional trusted CA bundle for outgoing TLS; empty uses the platform bundle.
+Additional trusted CA bundle for outgoing TLS. An empty value selects the
+platform bundle.
 
 Default:
 
@@ -204,7 +206,8 @@ postfix_tls_ca_file: ''
 
 Type: `dict`. Required: `false`.
 
-Unix submitters and their permitted envelope senders; root is trusted.
+Unix submitters and their permitted envelope senders. By default, root may use
+any sender address.
 
 Default:
 
@@ -230,7 +233,8 @@ postfix_account_backend: files
 
 Type: `bool`. Required: `false`.
 
-Add TLS-verified LDAP mailbox and sender lookups to the primary backend.
+Enables TLS-verified LDAP mailbox and sender lookups alongside the primary
+backend.
 
 Default:
 
@@ -263,7 +267,7 @@ postfix_ldap:
 
 Type: `bool`. Required: `false`.
 
-Require a positive SASL login access lookup on every listener requiring SMTP
+Requires a positive SASL login access lookup on every listener requiring SMTP
 AUTH. The default permits authenticated clients.
 
 Default:
@@ -337,7 +341,7 @@ postfix_dovecot_lmtp_transport: lmtp:unix:private/dovecot-lmtp
 
 Type: `bool`. Required: `false`.
 
-Deliver local Unix mailbox recipients through Dovecot LMTP as well.
+Enables Dovecot LMTP delivery for local Unix recipients.
 
 Default:
 
@@ -592,8 +596,8 @@ postfix_milter_default_action: tempfail
 
 Type: `bool`. Required: `false`.
 
-Back up main.cf, master.cf, log rotation and nonsecret built-in tables before
-replacing them.
+Enables backups of main.cf, master.cf, the log rotation configuration and
+nonsecret built-in tables before replacement.
 
 Default:
 
@@ -605,9 +609,9 @@ postfix_backup: true
 
 Type: `dict`. Required: `false`.
 
-Shared native database connection options for the existing PostfixAdmin schema;
-hosts is required for mysql or pgsql. Use a SELECT-only login and a Unix socket
-or verified TLS.
+Native connection options for the PostfixAdmin schema. Both mysql and pgsql
+require hosts. A SELECT-only login over a Unix socket or verified TLS is
+recommended.
 
 Default:
 
@@ -619,8 +623,9 @@ postfix_database: {}
 
 Type: `dict`. Required: `false`.
 
-Optional overrides of the PostfixAdmin domains, mailboxes, virtual_aliases,
-alias_domains, alias_domain_catchalls, senders and alias_domain_senders queries.
+Optional overrides of the PostfixAdmin queries for domains, mailboxes,
+virtual_aliases, alias_domains, alias_domain_catchalls, senders,
+alias_domain_senders and protected_senders.
 
 Default:
 
@@ -982,7 +987,8 @@ postfix_main_cf: {}
 
 Type: `list`. Required: `false`.
 
-Additional native master.cf services. Give each service a unique name and type.
+Additional native master.cf services, each identified by a unique combination of
+name and type.
 
 Default:
 

@@ -44,8 +44,6 @@
     state: restarted
 
 - name: Defer submission by an eligible login with untrusted directory TLS
-  become: true
-  become_user: root
   ansible.builtin.script:
     executable: python3
     cmd: >-

@@ -52,7 +52,8 @@ argument_specs:
           postmaster: root
           mailer-daemon: postmaster
           abuse: postmaster
-        description: Local aliases. Set root to a monitored address or local mailbox.
+        description: Local delivery aliases, including an optional root alias for a monitored
+          address or local mailbox.
       postfix_dovecot_auth_socket:
         type: str
         default: private/auth
@@ -68,14 +69,15 @@ argument_specs:
       postfix_tls_ca_file:
         type: str
         default: ''
-        description: Additional trusted CA bundle for outgoing TLS; empty uses the platform
-          bundle.
+        description: Additional trusted CA bundle for outgoing TLS. An empty value selects
+          the platform bundle.
       postfix_local_submitters:
         type: dict
         default:
           root:
             - '*'
-        description: Unix submitters and their permitted envelope senders; root is trusted.
+        description: Unix submitters and their permitted envelope senders. By default, root
+          may use any sender address.
       postfix_account_backend:
         type: str
         default: files
@@ -87,7 +89,8 @@ argument_specs:
       postfix_ldap_enabled:
         type: bool
         default: false
-        description: Add TLS-verified LDAP mailbox and sender lookups to the primary backend.
+        description: Enables TLS-verified LDAP mailbox and sender lookups alongside the
+          primary backend.
       postfix_ldap:
         type: dict
         description: Read-only LDAPS connection, directory eligibility filter and attributes
@@ -143,7 +146,7 @@ argument_specs:
       postfix_sasl_access_enabled:
         type: bool
         default: false
-        description: Require a positive SASL login access lookup on every listener requiring
+        description: Requires a positive SASL login access lookup on every listener requiring
           SMTP AUTH. The default permits authenticated clients.
       postfix_sasl_access_logins:
         type: list
@@ -172,7 +175,7 @@ argument_specs:
       postfix_local_lmtp_enabled:
         type: bool
         default: false
-        description: Deliver local Unix mailbox recipients through Dovecot LMTP as well.
+        description: Enables Dovecot LMTP delivery for local Unix recipients.
       postfix_providers:
         type: list
         default: []
@@ -298,20 +301,21 @@ argument_specs:
       postfix_backup:
         type: bool
         default: true
-        description: Back up main.cf, master.cf, log rotation and nonsecret built-in tables
-          before replacing them.
+        description: Enables backups of main.cf, master.cf, the log rotation configuration
+          and nonsecret built-in tables before replacement.
       postfix_database:
         type: dict
         default: {}
         no_log: true
-        description: Shared native database connection options for the existing PostfixAdmin
-          schema; hosts is required for mysql or pgsql. Use a SELECT-only login and a Unix
-          socket or verified TLS.
+        description: Native connection options for the PostfixAdmin schema. Both mysql and
+          pgsql require hosts. A SELECT-only login over a Unix socket or verified TLS is
+          recommended.
       postfix_database_queries:
         type: dict
         default: {}
-        description: Optional overrides of the PostfixAdmin domains, mailboxes, virtual_aliases,
-          alias_domains, alias_domain_catchalls, senders and alias_domain_senders queries.
+        description: Optional overrides of the PostfixAdmin queries for domains, mailboxes,
+          virtual_aliases, alias_domains, alias_domain_catchalls, senders, alias_domain_senders
+          and protected_senders.
       postfix_listeners:
         type: dict
         default: {}
@@ -491,8 +495,8 @@ argument_specs:
         type: list
         elements: dict
         default: []
-        description: Additional native master.cf services. Give each service a unique name
-          and type.
+        description: Additional native master.cf services, each identified by a unique combination
+          of name and type.
         options:
           name:
             type: str

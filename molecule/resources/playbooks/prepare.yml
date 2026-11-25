@@ -79,6 +79,7 @@
       loop: [/etc/postfix-test, /var/lib/postfix-test]
       loop_control:
         loop_var: __postfix_directory
+        label: "{{ __postfix_directory }}"
 
     - name: Install the shared SMTP client helper
       become: true
@@ -92,7 +93,7 @@
       become: true
       become_user: root
       ansible.builtin.copy:
-        content: "{{ hostvars[groups['postfix_directory'][0]].__postfix_directory_ca.content | b64decode }}"
+        content: "{{ hostvars[groups.postfix_directory[0]].__postfix_directory_ca.content | b64decode }}"
         dest: /etc/postfix-test/ldap-ca.pem
         mode: '0644'
 

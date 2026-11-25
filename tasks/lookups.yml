@@ -53,6 +53,7 @@
   loop: "{{ postfix_ldap_alias_queries.keys() }}"
   loop_control:
     loop_var: __postfix_alias
+    label: "{{ __postfix_alias }}"
   when: postfix_ldap_enabled
   no_log: true
   diff: false

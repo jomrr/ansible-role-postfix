@@ -21,10 +21,11 @@
     owner: root
     group: "{{ __postfix_tables[__postfix_map].group }}"
     mode: "{{ __postfix_tables[__postfix_map].mode }}"
-    backup: "{{ postfix_backup and not __postfix_tables[__postfix_map].secret and __postfix_map not in postfix_tables }}"
+    backup: &postfix_table_backup "{{ postfix_backup and not __postfix_tables[__postfix_map].secret and __postfix_map not in postfix_tables }}"
   loop: "{{ __postfix_tables | dict2items | selectattr('value.suffix') | map(attribute='key') }}"
   loop_control:
     loop_var: __postfix_map
+    label: "{{ __postfix_map }}"
   no_log: "{{ __postfix_tables[__postfix_map].secret }}"
   diff: "{{ ansible_diff_mode and not __postfix_tables[__postfix_map].secret and __postfix_map not in postfix_tables }}"
   register: __postfix_index_sources
@@ -38,10 +39,11 @@
     owner: root
     group: "{{ __postfix_tables[__postfix_map].group }}"
     mode: "{{ __postfix_tables[__postfix_map].mode }}"
-    backup: false
+    backup: *postfix_table_backup
   loop: "{{ __postfix_tables | dict2items | rejectattr('value.suffix') | map(attribute='key') }}"
   loop_control:
     loop_var: __postfix_map
+    label: "{{ __postfix_map }}"
   no_log: "{{ __postfix_tables[__postfix_map].secret }}"
   diff: false
   notify: reload postfix
@@ -65,6 +67,7 @@
   loop: "{{ __postfix_tables | postfix_exposed_indexes(__postfix_table_files.files) }}"
   loop_control:
     loop_var: __postfix_path
+    label: "{{ __postfix_path }}"
 
 - name: tables | Build missing, changed or stale indexes
   become: true
@@ -90,4 +93,5 @@
   loop: "{{ __postfix_tables | postfix_obsolete_maps(__postfix_table_files.files, __postfix_ldap_names) }}"
   loop_control:
     loop_var: __postfix_path
+    label: "{{ __postfix_path }}"
   diff: false

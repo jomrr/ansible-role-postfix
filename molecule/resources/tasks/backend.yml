@@ -2,11 +2,19 @@
 # role: postfix
 # file: molecule/resources/tasks/backend.yml
 
+- name: Mark the installed sender-domain table before changing the SQL backend
+  become: true
+  become_user: root
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/managed/sender-domain
+    line: "# Before switching to {{ __postfix_backend }}"
+
 - name: Apply the SQL account backend
   ansible.builtin.include_role:
     name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   vars:
     postfix_account_backend: "{{ __postfix_backend }}"
+    postfix_backup: "{{ __postfix_backend == 'mysql' }}"
     postfix_mailboxes: []
     postfix_ldap_enabled: "{{ __postfix_backend == 'pgsql' }}"
     postfix_sasl_access_enabled: "{{ postfix_ldap_enabled }}"
@@ -21,6 +29,18 @@
       dbname: postfixadmin
       user: "{{ 'root' if __postfix_backend == 'mysql' else 'postgres' }}"
       password: molecule-database-secret
+
+- name: Verify that only an enabled backup retains the previous text table
+  become: true
+  become_user: root
+  ansible.builtin.find:
+    paths: /etc/postfix/managed
+    patterns: [sender-domain, 'sender-domain.*~']
+    contains: '^# Before switching to {{ __postfix_backend }}$'
+  register: __postfix_marked_tables
+  failed_when: >-
+    '/etc/postfix/managed/sender-domain' in (__postfix_marked_tables.files | map(attribute='path'))
+    or (__postfix_marked_tables.matched > 0) != (__postfix_backend == 'mysql')
 
 - name: Verify disabled domains, mailboxes and missing SQL aliases
   become: true

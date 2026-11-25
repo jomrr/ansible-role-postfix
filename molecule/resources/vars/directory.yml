@@ -5,7 +5,7 @@
 __postfix_directory_filter: >-
   (&(objectClass=user)(memberOf=CN=MailUsers,CN=Users,DC=example,DC=test)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))
 __postfix_directory_connection: &directory_connection
-  uris: ["ldaps://{{ groups['postfix_directory'][0] }}"]
+  uris: ["ldaps://{{ groups.postfix_directory[0] }}"]
   bind_dn: CN=postfix-reader,CN=Users,DC=example,DC=test
   bind_password: 'Molecule-Bind-123!'
   base: DC=example,DC=test

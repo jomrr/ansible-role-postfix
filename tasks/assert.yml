@@ -162,6 +162,7 @@
   loop: "{{ (postfix_providers | map(attribute='username')) + (postfix_providers | map(attribute='password')) }}"
   loop_control:
     loop_var: __postfix_credential
+    label: Provider credential
   no_log: true
 
 - name: assert | Validate provider login separators

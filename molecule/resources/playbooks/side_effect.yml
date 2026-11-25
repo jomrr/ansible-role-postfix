@@ -44,6 +44,7 @@
       loop: [mysql, pgsql]
       loop_control:
         loop_var: __postfix_backend
+        label: "{{ __postfix_backend }}"
 
     - name: Exercise MX, source relay, gateway and internal submission
       ansible.builtin.import_tasks: ../tasks/modes.yml
