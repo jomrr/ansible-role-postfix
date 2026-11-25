@@ -2,7 +2,7 @@
 # role: postfix
 # file: handlers/main.yml
 
-- name: POSTFIX | Restart Postfix
+- name: Restart Postfix
   become: true
   become_user: root
   ansible.builtin.service:
@@ -10,7 +10,7 @@
     state: restarted
   listen: restart postfix
 
-- name: POSTFIX | Reload Postfix
+- name: Reload Postfix
   become: true
   become_user: root
   ansible.builtin.service:
